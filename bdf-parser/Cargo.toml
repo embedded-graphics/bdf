@@ -1,0 +1,6 @@
+[package]
+name = "bdf-parser"
+version = "0.1.0"
+authors = ["James Waples <jamwaffles@gmail.com>"]
+
+[dependencies]
