@@ -65,15 +65,6 @@ enum Token {
     StartProperties,
 }
 
-// Parser helpers
-// named!(
-//     parse_to_i32<i32>,
-//     flat_map!(
-//         recognize!(alt!(preceded!(tag!("-"), digit) | digit)),
-//         parse_to!(i32)
-//     )
-// );
-
 named!(
     parse_to_i32<i32>,
     flat_map!(
@@ -82,7 +73,8 @@ named!(
     )
 );
 
-// Token parsers
+named!(parse_to_u32<u32>, flat_map!(digit, parse_to!(u32)));
+
 named!(startfont<f32>, ws!(preceded!(tag!("STARTFONT"), float)));
 
 named!(
@@ -97,11 +89,7 @@ named!(
     size<FontSize>,
     ws!(preceded!(
         tag!("SIZE"),
-        tuple!(
-            flat_map!(digit, parse_to!(u32)),
-            flat_map!(digit, parse_to!(u32)),
-            flat_map!(digit, parse_to!(u32))
-        )
+        tuple!(parse_to_u32, parse_to_u32, parse_to_u32)
     ))
 );
 
@@ -109,12 +97,7 @@ named!(
     fontboundingbox<BoundingBox>,
     ws!(preceded!(
         tag!("FONTBOUNDINGBOX"),
-        tuple!(
-            flat_map!(digit, parse_to!(u32)),
-            flat_map!(digit, parse_to!(u32)),
-            parse_to_i32,
-            parse_to_i32
-        )
+        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
     ))
 );
 
@@ -126,10 +109,7 @@ named!(
 named!(
     fontascent<Token>,
     map!(
-        ws!(preceded!(
-            tag!("FONT_ASCENT"),
-            flat_map!(digit, parse_to!(u32))
-        )),
+        ws!(preceded!(tag!("FONT_ASCENT"), parse_to_u32)),
         Token::FontAscent
     )
 );
@@ -137,10 +117,7 @@ named!(
 named!(
     fontdescent<Token>,
     map!(
-        ws!(preceded!(
-            tag!("FONT_DESCENT"),
-            flat_map!(digit, parse_to!(u32))
-        )),
+        ws!(preceded!(tag!("FONT_DESCENT"), parse_to_u32)),
         Token::FontDescent
     )
 );
@@ -152,10 +129,7 @@ named!(
 
 named!(
     numchars<Token>,
-    map!(
-        ws!(preceded!(tag!("CHARS"), flat_map!(digit, parse_to!(u32)))),
-        Token::NumChars
-    )
+    map!(ws!(preceded!(tag!("CHARS"), parse_to_u32)), Token::NumChars)
 );
 
 named!(
@@ -167,10 +141,7 @@ named!(
 
 named!(
     charcode<u32>,
-    ws!(preceded!(
-        tag!("ENCODING"),
-        flat_map!(digit, parse_to!(u32))
-    ))
+    ws!(preceded!(tag!("ENCODING"), parse_to_u32))
 );
 
 named!(
@@ -178,10 +149,7 @@ named!(
     map!(
         ws!(preceded!(
             tag!("SWIDTH"),
-            tuple!(
-                flat_map!(digit, parse_to!(u32)),
-                flat_map!(digit, parse_to!(u32))
-            )
+            tuple!(parse_to_u32, parse_to_u32)
         )),
         Token::ScalableWidth
     )
@@ -192,10 +160,7 @@ named!(
     map!(
         ws!(preceded!(
             tag!("DWIDTH"),
-            tuple!(
-                flat_map!(digit, parse_to!(u32)),
-                flat_map!(digit, parse_to!(u32))
-            )
+            tuple!(parse_to_u32, parse_to_u32)
         )),
         Token::DeviceWidth
     )
@@ -205,12 +170,7 @@ named!(
     bbx<BoundingBox>,
     ws!(preceded!(
         tag!("BBX"),
-        tuple!(
-            flat_map!(digit, parse_to!(u32)),
-            flat_map!(digit, parse_to!(u32)),
-            parse_to_i32,
-            parse_to_i32
-        )
+        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
     ))
 );
 
