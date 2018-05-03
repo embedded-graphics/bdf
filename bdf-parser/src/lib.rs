@@ -3,11 +3,11 @@ extern crate nom;
 
 use nom::*;
 
-type FontSize = (u32, u32, u32);
-type BoundingBox = (u32, u32, i32, i32);
+pub type FontSize = (u32, u32, u32);
+pub type BoundingBox = (u32, u32, i32, i32);
 
 #[derive(Debug, Clone)]
-struct Glyph {
+pub struct Glyph {
     charcode: u32,
     bounding_box: BoundingBox,
     bitmap: Vec<u8>,
@@ -216,16 +216,23 @@ named!(
 
 named!(bitmap<Token>, map!(tag!("BITMAP"), |_| Token::StartBitmap));
 
-named!(chardata<u8>, map!(ws!(hex_u32), |res| res as u8));
+named!(
+    chardata<u8>,
+    map!(terminated!(hex_u32, line_ending), |res| res as u8)
+);
 
 named!(
     endchar<Token>,
-    map!(ws!(tag!("ENDCHAR")), |_| Token::EndChar)
+    map!(terminated!(tag!("ENDCHAR"), line_ending), |_| {
+        Token::EndChar
+    })
 );
 
 named!(
     endfont<Token>,
-    map!(ws!(tag!("ENDFONT")), |_| Token::EndFont)
+    map!(terminated!(tag!("ENDFONT"), line_ending), |_| {
+        Token::EndFont
+    })
 );
 
 named!(
@@ -256,34 +263,72 @@ named!(
 
 named!(
     glyph<Glyph>,
-    ws!(do_parse!(
+    do_parse!(
         startchar >> charcode: charcode >> swidth >> dwidth >> bounding_box: bbx >> bitmap
-            >> bitmap: many_till!(chardata, endchar) >> ({
+            >> bitmap: ws!(many1!(chardata)) >> endchar >> ({
             Glyph {
                 charcode,
                 bounding_box,
-                bitmap: bitmap.0,
+                bitmap: bitmap,
             }
         })
-    ))
+    )
 );
 
 named!(
     bdf<BDFFont>,
-    ws!(do_parse!(
-        metadata: metadata >> properties >> opt!(numchars) >> glyphs: many1!(glyph) >> ({
-            BDFFont {
-                metadata,
-                glyphs: glyphs,
-            }
-        })
-    ))
+    terminated!(
+        do_parse!(
+            metadata: metadata >> properties >> opt!(numchars) >> glyphs: many1!(glyph) >> ({
+                BDFFont {
+                    metadata,
+                    glyphs: glyphs,
+                }
+            })
+        ),
+        endfont
+    )
 );
+
+pub fn parse_char(input: &str) -> Result<(&[u8], Glyph), nom::Err<&[u8]>> {
+    glyph(input.as_bytes())
+}
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn it_parses_a_single_char() {
+        let chardata = r#"STARTCHAR U+0041
+ENCODING 65
+SWIDTH 500 0
+DWIDTH 8 0
+BBX 8 16 0 -2
+BITMAP
+00
+00
+00
+00
+18
+24
+24
+42
+42
+7E
+42
+42
+42
+42
+00
+00
+ENDCHAR
+"#;
+
+        let out = parse_char(&chardata);
+
+        assert!(out.is_ok());
+
+        assert_eq!(out.unwrap().0.len(), 0);
     }
 }

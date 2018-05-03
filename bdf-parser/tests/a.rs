@@ -5,7 +5,7 @@ use bdf_parser::*;
 use nom::*;
 
 #[test]
-fn it_parses_a_single_character() {
+fn it_parses_a_single_char_font() {
     let bdf = include_str!("./a.bdf");
 
     let parser = BDFParser::new(&bdf);
