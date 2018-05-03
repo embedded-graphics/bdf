@@ -5,12 +5,14 @@ use nom::*;
 
 pub type FontSize = (u32, u32, u32);
 pub type BoundingBox = (u32, u32, i32, i32);
+type Vec2 = (u32, u32);
 
 #[derive(Debug, Clone)]
 pub struct Glyph {
+    name: String,
     charcode: u32,
     bounding_box: BoundingBox,
-    bitmap: Vec<u8>,
+    bitmap: Vec<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,27 +46,6 @@ impl<'a> BDFParser<'a> {
     }
 }
 
-enum Token {
-    Byte(u8),
-    CharBoundingBox(BoundingBox),
-    NumChars(u32),
-    DeviceWidth((u32, u32)),
-    Encoding(u32),
-    EndChar,
-    EndFont,
-    EndProperties,
-    Font(String),
-    FontAscent(u32),
-    FontBoundingBox(BoundingBox),
-    FontDescent(u32),
-    ScalableWidth((u32, u32)),
-    Size(FontSize),
-    StartBitmap,
-    StartChar,
-    StartFont(f32),
-    StartProperties,
-}
-
 named!(
     parse_to_i32<i32>,
     flat_map!(
@@ -78,7 +59,7 @@ named!(parse_to_u32<u32>, flat_map!(digit, parse_to!(u32)));
 named!(startfont<f32>, ws!(preceded!(tag!("STARTFONT"), float)));
 
 named!(
-    font<String>,
+    fontname<String>,
     flat_map!(
         ws!(preceded!(tag!("FONT"), take_until!("\n"))),
         parse_to!(String)
@@ -94,49 +75,43 @@ named!(
 );
 
 named!(
-    fontboundingbox<BoundingBox>,
-    ws!(preceded!(
-        tag!("FONTBOUNDINGBOX"),
-        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
+    boundingbox<BoundingBox>,
+    ws!(tuple!(
+        parse_to_u32,
+        parse_to_u32,
+        parse_to_i32,
+        parse_to_i32
     ))
 );
 
 named!(
-    startproperties<Token>,
-    map!(tag!("STARTPROPERTIES"), |_| Token::StartProperties)
+    fontboundingbox<BoundingBox>,
+    ws!(preceded!(tag!("FONTBOUNDINGBOX"), boundingbox))
 );
 
 named!(
-    fontascent<Token>,
-    map!(
-        ws!(preceded!(tag!("FONT_ASCENT"), parse_to_u32)),
-        Token::FontAscent
+    startproperties<u32>,
+    ws!(preceded!(tag!("STARTPROPERTIES"), parse_to_u32))
+);
+
+named!(
+    fontascent<u32>,
+    ws!(preceded!(tag!("FONT_ASCENT"), parse_to_u32))
+);
+
+named!(
+    fontdescent<u32>,
+    ws!(preceded!(tag!("FONT_DESCENT"), parse_to_u32))
+);
+
+named!(numchars<u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
+
+named!(
+    startchar<String>,
+    flat_map!(
+        ws!(preceded!(tag!("STARTCHAR"), take_until!("\n"))),
+        parse_to!(String)
     )
-);
-
-named!(
-    fontdescent<Token>,
-    map!(
-        ws!(preceded!(tag!("FONT_DESCENT"), parse_to_u32)),
-        Token::FontDescent
-    )
-);
-
-named!(
-    endproperties<Token>,
-    map!(tag!("ENDPROPERTIES"), |_| Token::EndProperties)
-);
-
-named!(
-    numchars<Token>,
-    map!(ws!(preceded!(tag!("CHARS"), parse_to_u32)), Token::NumChars)
-);
-
-named!(
-    startchar<Token>,
-    map!(ws!(preceded!(tag!("STARTCHAR"), take_until!("\n"))), |_| {
-        Token::StartChar
-    })
 );
 
 named!(
@@ -145,60 +120,40 @@ named!(
 );
 
 named!(
-    swidth<Token>,
-    map!(
-        ws!(preceded!(
-            tag!("SWIDTH"),
-            tuple!(parse_to_u32, parse_to_u32)
-        )),
-        Token::ScalableWidth
-    )
-);
-
-named!(
-    dwidth<Token>,
-    map!(
-        ws!(preceded!(
-            tag!("DWIDTH"),
-            tuple!(parse_to_u32, parse_to_u32)
-        )),
-        Token::DeviceWidth
-    )
-);
-
-named!(
-    bbx<BoundingBox>,
+    swidth<Vec2>,
     ws!(preceded!(
-        tag!("BBX"),
-        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
+        tag!("SWIDTH"),
+        tuple!(parse_to_u32, parse_to_u32)
     ))
 );
 
-named!(bitmap<Token>, map!(tag!("BITMAP"), |_| Token::StartBitmap));
-
 named!(
-    chardata<u8>,
-    map!(terminated!(hex_u32, line_ending), |res| res as u8)
+    dwidth<Vec2>,
+    ws!(preceded!(
+        tag!("DWIDTH"),
+        tuple!(parse_to_u32, parse_to_u32)
+    ))
 );
 
 named!(
-    endchar<Token>,
-    map!(terminated!(tag!("ENDCHAR"), line_ending), |_| {
-        Token::EndChar
-    })
+    charboundingbox<BoundingBox>,
+    ws!(preceded!(tag!("BBX"), boundingbox))
 );
 
+named!(bitmap, terminated!(tag!("BITMAP"), line_ending));
 named!(
-    endfont<Token>,
-    map!(terminated!(tag!("ENDFONT"), line_ending), |_| {
-        Token::EndFont
-    })
+    endproperties,
+    terminated!(tag!("ENDPROPERTIES"), line_ending)
 );
+named!(endchar, terminated!(tag!("ENDCHAR"), line_ending));
+named!(endfont, terminated!(tag!("ENDFONT"), line_ending));
+
+named!(chardata<u32>, terminated!(hex_u32, line_ending));
 
 named!(
     metadata<Metadata>,
     ws!(do_parse!(
-        version: startfont >> name: font >> size: size >> bounding_box: fontboundingbox >> ({
+        version: startfont >> name: fontname >> size: size >> bounding_box: fontboundingbox >> ({
             Metadata {
                 version,
                 name,
@@ -224,9 +179,10 @@ named!(
 named!(
     glyph<Glyph>,
     do_parse!(
-        startchar >> charcode: charcode >> swidth >> dwidth >> bounding_box: bbx >> bitmap
-            >> bitmap: ws!(many1!(chardata)) >> endchar >> ({
+        name: startchar >> charcode: charcode >> swidth >> dwidth >> bounding_box: charboundingbox
+            >> bitmap >> bitmap: ws!(many1!(chardata)) >> endchar >> ({
             Glyph {
+                name,
                 charcode,
                 bounding_box,
                 bitmap: bitmap,
