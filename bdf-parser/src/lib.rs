@@ -10,9 +10,9 @@ type Vec2 = (u32, u32);
 #[derive(Debug, Clone)]
 pub struct Glyph {
     name: String,
-    charcode: u32,
+    charcode: i32,
     bounding_box: BoundingBox,
-    bitmap: Vec<u32>,
+    bitmap: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +59,15 @@ named!(parse_to_u32<u32>, flat_map!(digit, parse_to!(u32)));
 named!(startfont<f32>, ws!(preceded!(tag!("STARTFONT"), float)));
 
 named!(
+    hex_u8<u8>,
+    map!(recognize!(many_m_n!(2, 2, hex_digit1)), |res| {
+        println!("{:?}", res);
+
+        0
+    })
+);
+
+named!(
     fontname<String>,
     flat_map!(
         ws!(preceded!(tag!("FONT"), take_until!("\n"))),
@@ -89,6 +98,8 @@ named!(
     ws!(preceded!(tag!("FONTBOUNDINGBOX"), boundingbox))
 );
 
+named!(comment, ws!(preceded!(tag!("COMMENT"), take_until!("\n"))));
+
 named!(
     startproperties<u32>,
     ws!(preceded!(tag!("STARTPROPERTIES"), parse_to_u32))
@@ -115,8 +126,8 @@ named!(
 );
 
 named!(
-    charcode<u32>,
-    ws!(preceded!(tag!("ENCODING"), parse_to_u32))
+    charcode<i32>,
+    ws!(preceded!(tag!("ENCODING"), parse_to_i32))
 );
 
 named!(
@@ -148,12 +159,17 @@ named!(
 named!(endchar, terminated!(tag!("ENDCHAR"), line_ending));
 named!(endfont, terminated!(tag!("ENDFONT"), line_ending));
 
-named!(chardata<u32>, terminated!(hex_u32, line_ending));
+named!(
+    chardata<Vec<u8>>,
+    many0!(flat_map!(take!(2), parse_to!(u8)))
+);
 
 named!(
     metadata<Metadata>,
     ws!(do_parse!(
-        version: startfont >> name: fontname >> size: size >> bounding_box: fontboundingbox >> ({
+        many0!(comment) >> version: startfont >> many0!(comment) >> name: fontname
+            >> many0!(comment) >> size: size >> many0!(comment)
+            >> bounding_box: fontboundingbox >> ({
             Metadata {
                 version,
                 name,
@@ -177,15 +193,25 @@ named!(
 );
 
 named!(
+    bitmapdata<Vec<u8>>,
+    map!(ws!(take_until!("ENDCHAR")), |res| {
+        println!("res {:?}", res);
+
+        vec![]
+    })
+);
+
+named!(
     glyph<Glyph>,
     do_parse!(
         name: startchar >> charcode: charcode >> swidth >> dwidth >> bounding_box: charboundingbox
-            >> bitmap >> bitmap: ws!(many1!(chardata)) >> endchar >> ({
+            >> bitmap: delimited!(tag!("BITMAP\n"), bitmapdata, tag!("ENDCHAR\n")) >> ({
+            println!("{:?}", bitmap);
             Glyph {
                 name,
                 charcode,
                 bounding_box,
-                bitmap: bitmap,
+                bitmap: vec![],
             }
         })
     )
@@ -195,7 +221,8 @@ named!(
     bdf<BDFFont>,
     terminated!(
         do_parse!(
-            metadata: metadata >> properties >> opt!(numchars) >> glyphs: many1!(ws!(glyph)) >> ({
+            metadata: metadata >> many0!(comment) >> properties >> opt!(numchars)
+                >> glyphs: many1!(ws!(glyph)) >> ({
                 BDFFont {
                     metadata,
                     glyphs: glyphs,
@@ -243,8 +270,85 @@ ENDCHAR
 
         let out = parse_char(&chardata);
 
-        assert!(out.is_ok());
+        match out {
+            Ok((rest, _)) => {
+                println!("Rest: {:?}", String::from_utf8(rest.to_vec()).unwrap());
+                assert_eq!(rest.len(), 0);
+            }
+            Err(err) => match err {
+                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
+                nom::Err::Error(Context::Code(c, error_kind)) => {
+                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
 
-        assert_eq!(out.unwrap().0.len(), 0);
+                    panic!("Parse error {:?}", error_kind);
+                }
+                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
+                nom::Err::Error(l) => panic!("Idk {:?}", l),
+            },
+        };
+    }
+
+    #[test]
+    fn it_parses_negative_encodings() {
+        let chardata = r#"STARTCHAR U+0041
+ENCODING -1
+SWIDTH 500 0
+DWIDTH 8 0
+BBX 8 16 0 -2
+BITMAP
+ff
+ENDCHAR
+"#;
+
+        let out = parse_char(&chardata);
+
+        match out {
+            Err(err) => match err {
+                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
+                nom::Err::Error(Context::Code(c, error_kind)) => {
+                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
+
+                    panic!("Parse error {:?}", error_kind);
+                }
+                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
+                nom::Err::Error(l) => panic!("Idk {:?}", l),
+            },
+            Ok((rest, glyph)) => {
+                assert_eq!(glyph.charcode, -1i32);
+
+                assert_eq!(rest.len(), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn it_parses_chars_with_no_bitmap() {
+        let chardata = r#"STARTCHAR 000
+ENCODING 0
+SWIDTH 432 0
+DWIDTH 6 0
+BBX 0 0 0 0
+BITMAP
+ENDCHAR
+"#;
+
+        let out = parse_char(&chardata);
+
+        match out {
+            Err(err) => match err {
+                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
+                nom::Err::Error(Context::Code(c, error_kind)) => {
+                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
+
+                    panic!("Parse error {:?}", error_kind);
+                }
+                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
+                nom::Err::Error(l) => panic!("Idk {:?}", l),
+            },
+            Ok((rest, glyph)) => {
+                assert_eq!(glyph.bitmap.len(), 0);
+                assert_eq!(rest.len(), 0);
+            }
+        }
     }
 }

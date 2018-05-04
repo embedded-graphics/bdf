@@ -120,6 +120,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
                 Err(format!("Parse error {:?}", error_kind))
             }
             nom::Err::Failure(_) => Err(format!("Unrecoverable parse error")),
+            nom::Err::Error(l) => panic!("Idk {:?}", l),
         },
     }
 }

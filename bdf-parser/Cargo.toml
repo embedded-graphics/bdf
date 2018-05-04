@@ -4,8 +4,11 @@ version = "0.1.0"
 authors = ["James Waples <jamwaffles@gmail.com>"]
 
 [dependencies]
-nom = "4.0.0-beta3"
 nom_locate = "0.1.1"
+
+[dependencies.nom]
+version = "4.0.0-beta3"
+features = ["verbose-errors"]
 
 [dev-dependencies]
 chardet = "0.2.4"
