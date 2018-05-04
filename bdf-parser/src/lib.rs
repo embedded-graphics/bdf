@@ -195,7 +195,7 @@ named!(
     bdf<BDFFont>,
     terminated!(
         do_parse!(
-            metadata: metadata >> properties >> opt!(numchars) >> glyphs: many1!(glyph) >> ({
+            metadata: metadata >> properties >> opt!(numchars) >> glyphs: many1!(ws!(glyph)) >> ({
                 BDFFont {
                     metadata,
                     glyphs: glyphs,
