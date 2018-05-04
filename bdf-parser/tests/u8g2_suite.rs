@@ -103,18 +103,24 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
                 Ok(())
             }
         }
-        Err(err) => {
-            // match err {
-            //     nom::Err::Error(Context::Code(c, thing)) => println!(
-            //         "ContextError {:?} {:?}",
-            //         String::from_utf8(c.to_vec()).unwrap(),
-            //         thing
-            //     ),
-            //     _ => println!("OtherError {:?}", err),
-            // };
+        Err(err) => match err {
+            nom::Err::Incomplete(need) => Err(format!("Incomplete, need {:?} more", need)),
+            nom::Err::Error(Context::Code(c, error_kind)) => {
+                #[cfg(debug_assertions)]
+                let name = filepath.file_name().unwrap().to_str().unwrap();
+                #[cfg(debug_assertions)]
+                println!(
+                    "{} Error\n    {:?}",
+                    name,
+                    String::from_utf8(c.to_vec()).unwrap()
+                );
+                #[cfg(debug_assertions)]
+                panic!();
 
-            Err(format!("Parse error"))
-        }
+                Err(format!("Parse error {:?}", error_kind))
+            }
+            nom::Err::Failure(_) => Err(format!("Unrecoverable parse error")),
+        },
     }
 }
 

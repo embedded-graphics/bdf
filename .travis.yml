@@ -16,9 +16,7 @@ before_install:
 #   - cargo install cargo-travis || true
 
 script:
-  - cargo build -p bdf-parser
   - cargo build -p bdf-parser --release
-  - cargo test -p bdf-parser
   - cargo test -p bdf-parser --release
 
 # after_success:
