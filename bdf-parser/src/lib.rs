@@ -59,15 +59,6 @@ named!(parse_to_u32<u32>, flat_map!(digit, parse_to!(u32)));
 named!(startfont<f32>, ws!(preceded!(tag!("STARTFONT"), float)));
 
 named!(
-    hex_u8<u8>,
-    map!(recognize!(many_m_n!(2, 2, hex_digit1)), |res| {
-        println!("{:?}", res);
-
-        0
-    })
-);
-
-named!(
     fontname<String>,
     flat_map!(
         ws!(preceded!(tag!("FONT"), take_until!("\n"))),
@@ -193,11 +184,27 @@ named!(
 );
 
 named!(
-    bitmapdata<Vec<u8>>,
-    map!(ws!(take_until!("ENDCHAR")), |res| {
-        println!("res {:?}", res);
+    line_of_u32<Vec<u32>>,
+    map!(take_until_and_consume!("\n"), |res| {
+        res.chunks(8)
+            .map(|c| {
+                c.iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(k, &v)| {
+                        let digit = v as char;
+                        digit.to_digit(16).unwrap_or(0) << (k * 4)
+                    })
+                    .sum()
+            })
+            .collect()
+    })
+);
 
-        vec![]
+named!(
+    bitmapdata<Vec<u32>>,
+    map!(many_till!(line_of_u32, tag!("ENDCHAR\n")), |res| {
+        res.0.into_iter().flat_map(|l| l).collect::<Vec<u32>>()
     })
 );
 
@@ -205,8 +212,7 @@ named!(
     glyph<Glyph>,
     do_parse!(
         name: startchar >> charcode: charcode >> swidth >> dwidth >> bounding_box: charboundingbox
-            >> bitmap: delimited!(tag!("BITMAP\n"), bitmapdata, tag!("ENDCHAR\n")) >> ({
-            println!("{:?}", bitmap);
+            >> tag!("BITMAP\n") >> bitmap: bitmapdata >> ({
             Glyph {
                 name,
                 charcode,
@@ -240,6 +246,23 @@ pub fn parse_char(input: &str) -> Result<(&[u8], Glyph), nom::Err<&[u8]>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn it_parses_a_line_of_bitmap_data() {
+        let empty: &[u8] = &[];
+
+        assert_eq!(line_of_u32(&b"7e\n"[..]), Ok((empty, vec![0x7e])));
+        assert_eq!(line_of_u32(&b"ff\n"[..]), Ok((empty, vec![255])));
+        assert_eq!(line_of_u32(&b"CCCC\n"[..]), Ok((empty, vec![0xcccc])));
+        assert_eq!(
+            line_of_u32(&b"ffffffff\n"[..]),
+            Ok((empty, vec![0xffffffff]))
+        );
+        assert_eq!(
+            line_of_u32(&b"ffffffffaaaaaaaa\n"[..]),
+            Ok((empty, vec![0xffffffff, 0xaaaaaaaa]))
+        );
+    }
 
     #[test]
     fn it_parses_a_single_char() {
