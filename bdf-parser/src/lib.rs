@@ -89,7 +89,14 @@ named!(
     ws!(preceded!(tag!("FONTBOUNDINGBOX"), boundingbox))
 );
 
-named!(comment, ws!(preceded!(tag!("COMMENT"), take_until!("\n"))));
+named!(
+    comment,
+    delimited!(
+        alt!(tag!("COMMENT ") | tag!("COMMENT")),
+        take_until!("\n"),
+        line_ending
+    )
+);
 
 named!(
     startproperties<u32>,
@@ -246,6 +253,37 @@ pub fn parse_char(input: &str) -> Result<(&[u8], Glyph), nom::Err<&[u8]>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn it_parses_comments() {
+        let empty: &[u8] = &[];
+
+        let comment_text = "COMMENT test text\n";
+        let out = comment(comment_text.as_bytes());
+
+        // match out {
+        //     Ok((rest, result)) => {
+        //         println!("Rest: {:?}", String::from_utf8(rest.to_vec()).unwrap());
+        //         println!("Result: {:?}", String::from_utf8(result.to_vec()).unwrap());
+        //         assert_eq!(rest.len(), 0);
+        //     }
+        //     Err(err) => match err {
+        //         nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
+        //         nom::Err::Error(Context::Code(c, error_kind)) => {
+        //             println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
+
+        //             panic!("Parse error {:?}", error_kind);
+        //         }
+        //         nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
+        //         nom::Err::Error(l) => panic!("Idk {:?}", l),
+        //     },
+        // };
+
+        assert_eq!(out, Ok((empty, &b"test text"[..])));
+
+        // Empty comments
+        assert_eq!(comment("COMMENT\n".as_bytes()), Ok((empty, empty)));
+    }
 
     #[test]
     fn it_parses_a_line_of_bitmap_data() {
