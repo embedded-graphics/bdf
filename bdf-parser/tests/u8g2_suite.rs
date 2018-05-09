@@ -47,6 +47,8 @@ fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
         }
     }
 
+    files.sort();
+
     Ok(files)
 }
 
