@@ -3,7 +3,7 @@ extern crate nom;
 
 use nom::*;
 
-pub type FontSize = (u32, u32, u32);
+pub type FontSize = (i32, u32, u32);
 pub type BoundingBox = (u32, u32, i32, i32);
 type Vec2 = (u32, u32);
 
@@ -70,7 +70,7 @@ named!(
     size<FontSize>,
     ws!(preceded!(
         tag!("SIZE"),
-        tuple!(parse_to_u32, parse_to_u32, parse_to_u32)
+        tuple!(parse_to_i32, parse_to_u32, parse_to_u32)
     ))
 );
 
