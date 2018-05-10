@@ -243,7 +243,7 @@ named!(
                 }
             })
         ),
-        endfont
+        opt!(endfont)
     )
 );
 
@@ -254,6 +254,52 @@ pub fn parse_char(input: &str) -> Result<(&[u8], Glyph), nom::Err<&[u8]>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn it_parses_optional_endfont_tag() {
+        let chardata = r#"STARTFONT 2.1
+FONT "open_iconic_all_1x"
+SIZE 16 75 75
+FONTBOUNDINGBOX 16 16 0 0
+STARTPROPERTIES 3
+COPYRIGHT "https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE"
+FONT_ASCENT 0
+FONT_DESCENT 0
+ENDPROPERTIES
+STARTCHAR /home/kraus/git/open-iconic/png/account-login.png
+ENCODING 64
+DWIDTH 8 0
+BBX 8 8 0 0
+BITMAP
+1f
+01
+09
+fd
+09
+01
+1f
+00
+ENDCHAR
+"#;
+
+        let out = bdf(&chardata.as_bytes());
+
+        match out {
+            Err(err) => match err {
+                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
+                nom::Err::Error(Context::Code(c, error_kind)) => {
+                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
+
+                    panic!("Parse error {:?}", error_kind);
+                }
+                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
+                nom::Err::Error(l) => panic!("Idk {:?}", l),
+            },
+            Ok((rest, _)) => {
+                assert_eq!(rest.len(), 0);
+            }
+        }
+    }
 
     #[test]
     fn it_parses_comments() {
