@@ -7,7 +7,7 @@ authors = ["James Waples <jamwaffles@gmail.com>"]
 nom_locate = "0.1.1"
 
 [dependencies.nom]
-version = "4.0.0-beta3"
+version = "3.2.1"
 features = ["verbose-errors"]
 
 [dev-dependencies]

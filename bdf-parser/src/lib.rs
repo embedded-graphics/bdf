@@ -7,7 +7,7 @@ pub type FontSize = (i32, u32, u32);
 pub type BoundingBox = (u32, u32, i32, i32);
 type Vec2 = (u32, u32);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
     name: String,
     charcode: i32,
@@ -15,10 +15,10 @@ pub struct Glyph {
     bitmap: Vec<u8>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Properties;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Metadata {
     version: f32,
     name: String,
@@ -26,7 +26,7 @@ struct Metadata {
     bounding_box: BoundingBox,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BDFFont {
     metadata: Metadata,
     glyphs: Vec<Glyph>,
@@ -41,7 +41,7 @@ impl<'a> BDFParser<'a> {
         Self { source }
     }
 
-    pub fn parse(&self) -> Result<(&[u8], BDFFont), nom::Err<&[u8]>> {
+    pub fn parse(&self) -> nom::IResult<&[u8], BDFFont> {
         bdf(self.source.as_bytes())
     }
 }
@@ -54,7 +54,10 @@ named!(
     )
 );
 
-named!(parse_to_u32<u32>, flat_map!(digit, parse_to!(u32)));
+named!(
+    parse_to_u32<u32>,
+    flat_map!(recognize!(digit), parse_to!(u32))
+);
 
 named!(startfont<f32>, ws!(preceded!(tag!("STARTFONT"), float)));
 
@@ -208,10 +211,17 @@ named!(
     })
 );
 
+// named!(
+//     bitmapdata<Vec<u32>>,
+//     map!(many_till!(line_of_u32, tag!("ENDCHAR\n")), |res| {
+//         res.0.into_iter().flat_map(|l| l).collect::<Vec<u32>>()
+//     })
+// );
+
 named!(
     bitmapdata<Vec<u32>>,
-    map!(many_till!(line_of_u32, tag!("ENDCHAR\n")), |res| {
-        res.0.into_iter().flat_map(|l| l).collect::<Vec<u32>>()
+    map!(terminated!(many0!(line_of_u32), tag!("ENDCHAR\n")), |res| {
+        res.into_iter().flat_map(|l| l).collect::<Vec<u32>>()
     })
 );
 
@@ -247,13 +257,16 @@ named!(
     )
 );
 
-pub fn parse_char(input: &str) -> Result<(&[u8], Glyph), nom::Err<&[u8]>> {
+pub fn parse_char(input: &str) -> nom::IResult<&[u8], Glyph> {
     glyph(input.as_bytes())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::IResult;
+
+    const EMPTY: &[u8] = &[];
 
     #[test]
     fn it_parses_optional_endfont_tag() {
@@ -282,70 +295,37 @@ fd
 ENDCHAR
 "#;
 
-        let out = bdf(&chardata.as_bytes());
+        let out = bdf(&chardata.as_bytes()).unwrap();
 
-        match out {
-            Err(err) => match err {
-                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
-                nom::Err::Error(Context::Code(c, error_kind)) => {
-                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
-
-                    panic!("Parse error {:?}", error_kind);
-                }
-                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
-                nom::Err::Error(l) => panic!("Idk {:?}", l),
-            },
-            Ok((rest, _)) => {
-                assert_eq!(rest.len(), 0);
-            }
-        }
+        assert_eq!(out.0, EMPTY);
     }
 
     #[test]
     fn it_parses_comments() {
-        let empty: &[u8] = &[];
-
         let comment_text = "COMMENT test text\n";
         let out = comment(comment_text.as_bytes());
 
-        // match out {
-        //     Ok((rest, result)) => {
-        //         println!("Rest: {:?}", String::from_utf8(rest.to_vec()).unwrap());
-        //         println!("Result: {:?}", String::from_utf8(result.to_vec()).unwrap());
-        //         assert_eq!(rest.len(), 0);
-        //     }
-        //     Err(err) => match err {
-        //         nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
-        //         nom::Err::Error(Context::Code(c, error_kind)) => {
-        //             println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
+        assert_eq!(out, IResult::Done(EMPTY, &b"test text"[..]));
 
-        //             panic!("Parse error {:?}", error_kind);
-        //         }
-        //         nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
-        //         nom::Err::Error(l) => panic!("Idk {:?}", l),
-        //     },
-        // };
-
-        assert_eq!(out, Ok((empty, &b"test text"[..])));
-
-        // Empty comments
-        assert_eq!(comment("COMMENT\n".as_bytes()), Ok((empty, empty)));
+        // EMPTY comments
+        assert_eq!(comment("COMMENT\n".as_bytes()), IResult::Done(EMPTY, EMPTY));
     }
 
     #[test]
     fn it_parses_a_line_of_bitmap_data() {
-        let empty: &[u8] = &[];
-
-        assert_eq!(line_of_u32(&b"7e\n"[..]), Ok((empty, vec![0x7e])));
-        assert_eq!(line_of_u32(&b"ff\n"[..]), Ok((empty, vec![255])));
-        assert_eq!(line_of_u32(&b"CCCC\n"[..]), Ok((empty, vec![0xcccc])));
+        assert_eq!(line_of_u32(&b"7e\n"[..]), IResult::Done(EMPTY, vec![0x7e]));
+        assert_eq!(line_of_u32(&b"ff\n"[..]), IResult::Done(EMPTY, vec![255]));
+        assert_eq!(
+            line_of_u32(&b"CCCC\n"[..]),
+            IResult::Done(EMPTY, vec![0xcccc])
+        );
         assert_eq!(
             line_of_u32(&b"ffffffff\n"[..]),
-            Ok((empty, vec![0xffffffff]))
+            IResult::Done(EMPTY, vec![0xffffffff])
         );
         assert_eq!(
             line_of_u32(&b"ffffffffaaaaaaaa\n"[..]),
-            Ok((empty, vec![0xffffffff, 0xaaaaaaaa]))
+            IResult::Done(EMPTY, vec![0xffffffff, 0xaaaaaaaa])
         );
     }
 
@@ -378,22 +358,21 @@ ENDCHAR
 
         let out = parse_char(&chardata);
 
-        match out {
-            Ok((rest, _)) => {
-                println!("Rest: {:?}", String::from_utf8(rest.to_vec()).unwrap());
-                assert_eq!(rest.len(), 0);
-            }
-            Err(err) => match err {
-                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
-                nom::Err::Error(Context::Code(c, error_kind)) => {
-                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
-
-                    panic!("Parse error {:?}", error_kind);
+        assert_eq!(
+            out,
+            IResult::Done(
+                EMPTY,
+                Glyph {
+                    name: "U+0041".to_string(),
+                    charcode: 65,
+                    bitmap: vec![
+                        0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7E, 0x42, 0x42,
+                        0x42, 0x42, 0x00, 0x00,
+                    ],
+                    bounding_box: (8, 16, 0, -2),
                 }
-                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
-                nom::Err::Error(l) => panic!("Idk {:?}", l),
-            },
-        };
+            )
+        );
     }
 
     #[test]
@@ -408,25 +387,9 @@ ff
 ENDCHAR
 "#;
 
-        let out = parse_char(&chardata);
+        let out = parse_char(&chardata).unwrap();
 
-        match out {
-            Err(err) => match err {
-                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
-                nom::Err::Error(Context::Code(c, error_kind)) => {
-                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
-
-                    panic!("Parse error {:?}", error_kind);
-                }
-                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
-                nom::Err::Error(l) => panic!("Idk {:?}", l),
-            },
-            Ok((rest, glyph)) => {
-                assert_eq!(glyph.charcode, -1i32);
-
-                assert_eq!(rest.len(), 0);
-            }
-        }
+        assert_eq!(out.1.charcode, -1i32);
     }
 
     #[test]
@@ -440,23 +403,9 @@ BITMAP
 ENDCHAR
 "#;
 
-        let out = parse_char(&chardata);
+        let out = parse_char(&chardata).unwrap();
 
-        match out {
-            Err(err) => match err {
-                nom::Err::Incomplete(need) => panic!("Incomplete, need {:?} more", need),
-                nom::Err::Error(Context::Code(c, error_kind)) => {
-                    println!("Debug: {:?}", String::from_utf8(c.to_vec()).unwrap());
-
-                    panic!("Parse error {:?}", error_kind);
-                }
-                nom::Err::Failure(_) => panic!("Unrecoverable parse error"),
-                nom::Err::Error(l) => panic!("Idk {:?}", l),
-            },
-            Ok((rest, glyph)) => {
-                assert_eq!(glyph.bitmap.len(), 0);
-                assert_eq!(rest.len(), 0);
-            }
-        }
+        assert_eq!(out.1.bitmap.len(), 0);
+        assert_eq!(out.0, EMPTY);
     }
 }
