@@ -219,7 +219,7 @@ named!(
     glyph<Glyph>,
     do_parse!(
         name: startchar >> charcode: charcode >> opt!(swidth) >> opt!(dwidth)
-            >> bounding_box: charboundingbox >> tag!("BITMAP\n") >> bitmap: bitmapdata
+            >> bounding_box: charboundingbox >> ws!(tag!("BITMAP")) >> bitmap: bitmapdata
             >> ({
                 Glyph {
                     name,
