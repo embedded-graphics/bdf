@@ -403,47 +403,55 @@ ENDCHAR"#;
         );
     }
 
-    //     #[test]
-    //     fn it_parses_negative_encodings() {
-    //         let chardata = r#"STARTCHAR U+0041
-    // ENCODING -1
-    // SWIDTH 500 0
-    // DWIDTH 8 0
-    // BBX 8 16 0 -2
-    // BITMAP
-    // ff
-    // ENDCHAR
-    // "#;
+    #[test]
+    fn it_parses_negative_encodings() {
+        let chardata = r#"STARTCHAR 000
+ENCODING -1
+SWIDTH 432 0
+DWIDTH 6 0
+BBX 0 0 0 0
+BITMAP
+ENDCHAR"#;
 
-    //         let out = parse_char(&chardata).unwrap();
+        let out = parse_char(&chardata);
 
-    //         assert_eq!(out.1.charcode, -1i32);
-    //     }
+        assert_eq!(
+            out,
+            IResult::Done(
+                EMPTY,
+                Glyph {
+                    bitmap: vec![],
+                    bounding_box: (0, 0, 0, 0),
+                    charcode: -1i32,
+                    name: "000".to_string(),
+                }
+            )
+        );
+    }
 
-    //     #[test]
-    //     fn it_parses_chars_with_no_bitmap() {
-    //         let chardata = r#"STARTCHAR 000
-    // ENCODING 0
-    // SWIDTH 432 0
-    // DWIDTH 6 0
-    // BBX 0 0 0 0
-    // BITMAP
-    // ENDCHAR
-    // "#;
+    #[test]
+    fn it_parses_chars_with_no_bitmap() {
+        let chardata = r#"STARTCHAR 000
+ENCODING 0
+SWIDTH 432 0
+DWIDTH 6 0
+BBX 0 0 0 0
+BITMAP
+ENDCHAR"#;
 
-    //         let out = parse_char(&chardata);
+        let out = parse_char(&chardata);
 
-    //         assert_eq!(
-    //             out,
-    //             IResult::Done(
-    //                 EMPTY,
-    //                 Glyph {
-    //                     bitmap: vec![],
-    //                     bounding_box: (0, 0, 0, 0),
-    //                     charcode: 0,
-    //                     name: "000".to_string(),
-    //                 }
-    //             )
-    //         );
-    //     }
+        assert_eq!(
+            out,
+            IResult::Done(
+                EMPTY,
+                Glyph {
+                    bitmap: vec![],
+                    bounding_box: (0, 0, 0, 0),
+                    charcode: 0,
+                    name: "000".to_string(),
+                }
+            )
+        );
+    }
 }
