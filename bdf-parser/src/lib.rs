@@ -242,18 +242,17 @@ named!(
 
 named!(
     glyph<Glyph>,
-    do_parse!(
+    ws!(do_parse!(
         name: startchar >> charcode: charcode >> opt!(swidth) >> opt!(dwidth)
-            >> bounding_box: charboundingbox >> ws!(tag!("BITMAP")) >> bitmap: char_bitmap
-            >> ({
-                Glyph {
-                    name,
-                    charcode,
-                    bounding_box,
-                    bitmap,
-                }
-            })
-    )
+            >> bounding_box: charboundingbox >> bitmap: char_bitmap >> ({
+            Glyph {
+                name,
+                charcode,
+                bounding_box,
+                bitmap,
+            }
+        })
+    ))
 );
 
 named!(
@@ -311,21 +310,21 @@ mod tests {
     // ENDFONT
     // "#;
 
-    //         let out = bdf(&chardata.as_bytes()).unwrap();
+    //         let out = bdf(&chardata.as_bytes());
 
-    //         assert_eq!(out.0, EMPTY);
+    //         assert_eq!(out, IResult::Incomplete(Needed::Size(10)));
     //     }
 
-    // #[test]
-    // fn it_parses_comments() {
-    //     let comment_text = "COMMENT test text\n";
-    //     let out = comment(comment_text.as_bytes());
+    #[test]
+    fn it_parses_comments() {
+        let comment_text = "COMMENT test text\n";
+        let out = comment(comment_text.as_bytes());
 
-    //     assert_eq!(out, IResult::Done(EMPTY, &b"test text"[..]));
+        assert_eq!(out, IResult::Done(EMPTY, &b"test text"[..]));
 
-    //     // EMPTY comments
-    //     assert_eq!(comment("COMMENT\n".as_bytes()), IResult::Done(EMPTY, EMPTY));
-    // }
+        // EMPTY comments
+        assert_eq!(comment("COMMENT\n".as_bytes()), IResult::Done(EMPTY, EMPTY));
+    }
 
     #[test]
     fn it_parses_bitmap_data() {
@@ -353,53 +352,56 @@ mod tests {
             char_bitmap(&b"BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR"[..]),
             IResult::Done(EMPTY, vec![0xffffffff, 0xaaaaaaaa])
         );
+        assert_eq!(
+            char_bitmap(
+                &b"BITMAP\n00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00\nENDCHAR"
+                    [..]
+            ),
+            IResult::Done(EMPTY, vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000])
+        );
     }
 
-    //     #[test]
-    //     fn it_parses_a_single_char() {
-    //         let chardata = r#"STARTCHAR U+0041
-    // ENCODING 65
-    // SWIDTH 500 0
-    // DWIDTH 8 0
-    // BBX 8 16 0 -2
-    // BITMAP
-    // 00
-    // 00
-    // 00
-    // 00
-    // 18
-    // 24
-    // 24
-    // 42
-    // 42
-    // 7E
-    // 42
-    // 42
-    // 42
-    // 42
-    // 00
-    // 00
-    // ENDCHAR
-    // "#;
+    #[test]
+    fn it_parses_a_single_char() {
+        let chardata = r#"STARTCHAR ZZZZ
+ENCODING 65
+SWIDTH 500 0
+DWIDTH 8 0
+BBX 8 16 0 -2
+BITMAP
+00
+00
+00
+00
+18
+24
+24
+42
+42
+7E
+42
+42
+42
+42
+00
+00
+ENDCHAR"#;
 
-    //         let out = parse_char(&chardata);
+        let out = parse_char(&chardata);
 
-    //         assert_eq!(
-    //             out,
-    //             IResult::Done(
-    //                 EMPTY,
-    //                 Glyph {
-    //                     name: "U+0041".to_string(),
-    //                     charcode: 65,
-    //                     bitmap: vec![
-    //                         0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7E, 0x42, 0x42,
-    //                         0x42, 0x42, 0x00, 0x00,
-    //                     ],
-    //                     bounding_box: (8, 16, 0, -2),
-    //                 }
-    //             )
-    //         );
-    //     }
+        assert_eq!(
+            out,
+            IResult::Done(
+                EMPTY,
+                Glyph {
+                    name: "ZZZZ".to_string(),
+                    charcode: 65,
+                    bitmap: vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000],
+                    bounding_box: (8, 16, 0, -2),
+                }
+            )
+        );
+    }
 
     //     #[test]
     //     fn it_parses_negative_encodings() {
