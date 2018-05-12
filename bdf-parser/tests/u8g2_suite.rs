@@ -105,6 +105,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
                 Ok(())
             }
         }
+        IResult::Error(e) => Err(format!("Error")),
         _ => Err(format!("Other error")),
     }
 }
