@@ -81,20 +81,84 @@ named!(
 // GLYPH
 //
 named!(
-    glyph<Glyph>,
+    glyph_name<String>,
+    flat_map!(take_until!("\n"), parse_to!(String))
+);
+
+named!(
+    glyph_charcode<i32>,
+    ws!(preceded!(tag!("ENCODING"), parse_to_i32))
+);
+
+named!(
+    glyph_dwidth<Vec2>,
+    ws!(preceded!(
+        tag!("DWIDTH"),
+        tuple!(parse_to_u32, parse_to_u32)
+    ))
+);
+
+named!(
+    glyph_swidth<Vec2>,
+    ws!(preceded!(
+        tag!("SWIDTH"),
+        tuple!(parse_to_u32, parse_to_u32)
+    ))
+);
+
+named!(
+    glyph_bounding_box<BoundingBox>,
+    ws!(preceded!(
+        tag!("BBX"),
+        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
+    ))
+);
+
+named!(
+    glyph_bitmap<Vec<u32>>,
     map!(
         ws!(delimited!(
-            tag!("STARTCHAR"),
+            tag!("BITMAP"),
             take_until!("ENDCHAR"),
             tag!("ENDCHAR")
         )),
-        |_| Glyph {
-            bitmap: vec![0x2f02],
-            bounding_box: (8, 8, 0, 0),
-            charcode: 64,
-            name: "000".to_string(),
+        |res| {
+            res.to_vec()
+                .iter()
+                .filter(|d| is_hex_digit(**d))
+                .collect::<Vec<&u8>>()
+                .chunks(8)
+                .map(|c| {
+                    c.iter()
+                        .rev()
+                        .enumerate()
+                        .map(|(k, &&v)| {
+                            let digit = v as char;
+                            digit.to_digit(16).unwrap_or(0) << (k * 4)
+                        })
+                        .sum()
+                })
+                .collect()
         }
     )
+);
+
+named!(
+    glyph<Glyph>,
+    ws!(preceded!(
+        tag!("STARTCHAR"),
+        do_parse!(
+            name: glyph_name >> charcode: glyph_charcode >> opt!(glyph_swidth) >> opt!(glyph_dwidth)
+                >> bounding_box: glyph_bounding_box >> bitmap: glyph_bitmap >> ({
+                Glyph {
+                    bitmap,
+                    bounding_box,
+                    charcode,
+                    name,
+                }
+            })
+        )
+    ))
 );
 
 //
@@ -150,7 +214,7 @@ named!(
 named!(
     inner_bdf<BDFFont>,
     ws!(do_parse!(
-        header >> properties >> many0!(glyph) >> ({
+        header >> properties >> glyphs: many0!(glyph) >> ({
             BDFFont {
                 metadata: Metadata {
                     version: 2.1,
@@ -158,7 +222,7 @@ named!(
                     size: (16, 75, 75),
                     bounding_box: (16, 16, 0, 0),
                 },
-                glyphs: vec![],
+                glyphs,
             }
         })
     ))
