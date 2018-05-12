@@ -71,6 +71,8 @@ named!(
     )
 );
 
+named!(numchars<u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
+
 //
 // PROPERTIES
 //
@@ -223,7 +225,7 @@ named!(
 named!(
     inner_bdf<BDFFont>,
     ws!(do_parse!(
-        header >> properties >> glyphs: many0!(glyph) >> ({
+        header >> properties >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
             BDFFont {
                 metadata: Metadata {
                     version: 2.1,
