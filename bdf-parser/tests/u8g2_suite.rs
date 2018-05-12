@@ -6,11 +6,9 @@ extern crate nom;
 use chardet::{detect, charset2encoding};
 use encoding::DecoderTrap;
 use encoding::label::encoding_from_whatwg_label;
-use std::fs::File;
+use std::fs;
 use std::fs::OpenOptions;
-use std::fs::{self, DirEntry};
 use std::io;
-use std::io::prelude::*;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -96,7 +94,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let out = parser.parse();
 
     match out {
-        IResult::Done(rest, parsed) => {
+        IResult::Done(rest, _parsed) => {
             // println!("Rest: {:?}", rest);
 
             if rest.len() > 0 {
@@ -105,7 +103,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
                 Ok(())
             }
         }
-        IResult::Error(e) => Err(format!("Error")),
+        IResult::Error(_) => Err(format!("Error")),
         _ => Err(format!("Other error")),
     }
 }
