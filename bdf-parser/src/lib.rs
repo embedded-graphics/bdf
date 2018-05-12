@@ -63,13 +63,18 @@ named!(
 );
 
 named!(
-    comment,
-    delimited!(
-        alt!(tag!("COMMENT ") | tag!("COMMENT")),
-        take_until!("\n"),
-        line_ending
+    comment<String>,
+    flat_map!(
+        delimited!(
+            alt!(tag!("COMMENT ") | tag!("COMMENT")),
+            take_until!("\n"),
+            line_ending
+        ),
+        parse_to!(String)
     )
 );
+
+named!(optional_comments<Vec<String>>, many0!(comment));
 
 named!(numchars<u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
 
@@ -210,8 +215,9 @@ named!(
 named!(
     header<Metadata>,
     ws!(do_parse!(
-        version: metadata_version >> name: metadata_name >> size: metadata_size
-            >> bounding_box: metadata_bounding_box >> ({
+        optional_comments >> version: metadata_version >> optional_comments >> name: metadata_name
+            >> optional_comments >> size: metadata_size >> optional_comments
+            >> bounding_box: metadata_bounding_box >> optional_comments >> ({
             Metadata {
                 version,
                 name,
@@ -383,10 +389,13 @@ ENDCHAR
         let comment_text = "COMMENT test text\n";
         let out = comment(comment_text.as_bytes());
 
-        assert_eq!(out, IResult::Done(EMPTY, &b"test text"[..]));
+        assert_eq!(out, IResult::Done(EMPTY, "test text".to_string()));
 
         // EMPTY comments
-        assert_eq!(comment("COMMENT\n".as_bytes()), IResult::Done(EMPTY, EMPTY));
+        assert_eq!(
+            comment("COMMENT\n".as_bytes()),
+            IResult::Done(EMPTY, "".to_string())
+        );
     }
 
     #[test]
