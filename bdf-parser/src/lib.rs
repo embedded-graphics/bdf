@@ -46,6 +46,25 @@ impl<'a> BDFParser<'a> {
     }
 }
 
+//
+// HELPERS
+//
+named!(
+    parse_to_i32<i32>,
+    flat_map!(
+        recognize!(preceded!(opt!(one_of!("+-")), digit)),
+        parse_to!(i32)
+    )
+);
+
+named!(
+    parse_to_u32<u32>,
+    flat_map!(recognize!(digit), parse_to!(u32))
+);
+
+//
+// PROPERTIES
+//
 named!(
     properties<Properties>,
     map!(
@@ -58,6 +77,9 @@ named!(
     )
 );
 
+//
+// GLYPH
+//
 named!(
     glyph<Glyph>,
     map!(
@@ -75,16 +97,51 @@ named!(
     )
 );
 
+//
+// METADATA
+///
+named!(
+    metadata_version<f32>,
+    flat_map!(
+        preceded!(tag!("STARTFONT "), take_until!("\n")),
+        parse_to!(f32)
+    )
+);
+
+named!(
+    metadata_name<String>,
+    flat_map!(
+        preceded!(tag!("FONT "), take_until!("\n")),
+        parse_to!(String)
+    )
+);
+
+named!(
+    metadata_size<FontSize>,
+    ws!(preceded!(
+        tag!("SIZE"),
+        tuple!(parse_to_i32, parse_to_u32, parse_to_u32)
+    ))
+);
+
+named!(
+    metadata_bounding_box<BoundingBox>,
+    ws!(preceded!(
+        tag!("FONTBOUNDINGBOX"),
+        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
+    ))
+);
+
 named!(
     header<Metadata>,
     ws!(do_parse!(
-        tag!("STARTFONT 2.1") >> tag!("FONT \"open_iconic_all_1x\"") >> tag!("SIZE 16 75 75")
-            >> tag!("FONTBOUNDINGBOX 16 16 0 0") >> ({
+        version: metadata_version >> name: metadata_name >> size: metadata_size
+            >> bounding_box: metadata_bounding_box >> ({
             Metadata {
-                version: 2.1,
-                name: String::from("\"open_iconic_all_1x\""),
-                size: (16, 75, 75),
-                bounding_box: (16, 16, 0, 0),
+                version,
+                name,
+                size,
+                bounding_box,
             }
         })
     ))
