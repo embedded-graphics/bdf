@@ -3,9 +3,9 @@ extern crate chardet;
 extern crate encoding;
 extern crate nom;
 
-use chardet::{charset2encoding, detect};
-use encoding::label::encoding_from_whatwg_label;
+use chardet::{detect, charset2encoding};
 use encoding::DecoderTrap;
+use encoding::label::encoding_from_whatwg_label;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self, DirEntry};
@@ -96,7 +96,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let out = parser.parse();
 
     match out {
-        Ok((rest, parsed)) => {
+        IResult::Done(rest, parsed) => {
             // println!("Rest: {:?}", rest);
 
             if rest.len() > 0 {
@@ -105,25 +105,7 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
                 Ok(())
             }
         }
-        Err(err) => match err {
-            nom::Err::Incomplete(need) => Err(format!("Incomplete, need {:?} more", need)),
-            nom::Err::Error(Context::Code(c, error_kind)) => {
-                // #[cfg(debug_assertions)]
-                // let name = filepath.file_name().unwrap().to_str().unwrap();
-                // #[cfg(debug_assertions)]
-                // println!(
-                //     "{} Error\n    {:?}",
-                //     name,
-                //     String::from_utf8(c.to_vec()).unwrap()
-                // );
-                // #[cfg(debug_assertions)]
-                // panic!();
-
-                Err(format!("Parse error {:?}", error_kind))
-            }
-            nom::Err::Failure(_) => Err(format!("Unrecoverable parse error")),
-            nom::Err::Error(l) => Err(format!("Other error")),
-        },
+        _ => Err(format!("Other error")),
     }
 }
 
