@@ -250,10 +250,6 @@ named!(
     alt_complete!(ws!(terminated!(inner_bdf, tag!("ENDFONT"))) | inner_bdf)
 );
 
-pub fn parse_char(input: &str) -> nom::IResult<&[u8], Glyph> {
-    glyph(input.as_bytes())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -459,7 +455,7 @@ BITMAP
 00
 ENDCHAR"#;
 
-        let out = parse_char(&chardata);
+        let out = glyph(&chardata.as_bytes());
 
         assert_eq!(
             out,
@@ -485,7 +481,7 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = parse_char(&chardata);
+        let out = glyph(&chardata.as_bytes());
 
         assert_eq!(
             out,
@@ -511,7 +507,7 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = parse_char(&chardata);
+        let out = glyph(&chardata.as_bytes());
 
         assert_eq!(
             out,

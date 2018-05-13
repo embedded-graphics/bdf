@@ -15,22 +15,6 @@ use std::path::{Path, PathBuf};
 use bdf_parser::*;
 use nom::*;
 
-// // one possible implementation of walking a directory only visiting files
-// fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> io::Result<()> {
-//     if dir.is_dir() {
-//         for entry in fs::read_dir(dir)? {
-//             let entry = entry?;
-//             let path = entry.path();
-//             if path.is_dir() {
-//                 visit_dirs(&path, cb)?;
-//             } else {
-//                 cb(&entry);
-//             }
-//         }
-//     }
-//     Ok(())
-// }
-
 fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
@@ -51,11 +35,6 @@ fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 }
 
 fn read(path: &Path) -> String {
-    // let mut file = File::open(path).expect("Unable to open file");
-    // let mut contents = String::new();
-    // file.read_to_string(&mut contents)
-    //     .expect(&format!("Unable to read file {:?}", path));
-
     // open text file
     let mut fh = OpenOptions::new()
         .read(true)
@@ -74,14 +53,11 @@ fn read(path: &Path) -> String {
 
     // decode file into utf-8
     let coder = encoding_from_whatwg_label(charset2encoding(&result.0));
-    // if coder.is_some() {
+
     let utf8reader = coder
         .unwrap()
         .decode(&reader, DecoderTrap::Ignore)
         .expect("Error");
-    // }
-
-    // contents
 
     utf8reader
 }
@@ -95,8 +71,6 @@ fn test_font_parse(filepath: &Path) -> Result<(), String> {
 
     match out {
         IResult::Done(rest, _parsed) => {
-            // println!("Rest: {:?}", rest);
-
             if rest.len() > 0 {
                 Err(format!("{} remaining bytes to parse", rest.len()))
             } else {
@@ -114,11 +88,7 @@ fn it_parses_all_u8g2_fonts() {
         .canonicalize()
         .unwrap();
 
-    // println!("Font dir {:?}", fontdir);
-
     let fonts = collect_font_files(&fontdir).expect("Could not get list of u8g2 fonts");
-
-    // println!("{:?}", fonts);
 
     let results = fonts.iter().map(|fpath| test_font_parse(fpath));
 
