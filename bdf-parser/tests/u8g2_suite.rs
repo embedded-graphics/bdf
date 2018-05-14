@@ -65,7 +65,7 @@ fn read(path: &Path) -> String {
 fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let bdf = read(filepath);
 
-    let parser = BDFParser::new(&bdf);
+    let parser = BDFParser::from_str(&bdf);
 
     let out = parser.parse();
 

@@ -24,7 +24,7 @@ pub struct BDFParser<'a> {
 }
 
 impl<'a> BDFParser<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn from_str(source: &'a str) -> Self {
         Self { source }
     }
 
