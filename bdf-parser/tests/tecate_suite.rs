@@ -11,11 +11,11 @@ use helpers::*;
 
 #[test]
 fn it_parses_all_u8g2_fonts() {
-    let fontdir = Path::new("./tests/u8g2/tools/font/bdf")
+    let fontdir = Path::new("./tests/tecate-bitmap-fonts/bitmap")
         .canonicalize()
         .unwrap();
 
-    let fonts = collect_font_files(&fontdir).expect("Could not get list of u8g2 fonts");
+    let fonts = collect_font_files(&fontdir).expect("Could not get list of fonts");
 
     let results = fonts.iter().map(|fpath| test_font_parse(fpath));
 
@@ -27,7 +27,7 @@ fn it_parses_all_u8g2_fonts() {
         }
 
         println!(
-            "{0: <30} {1:?}",
+            "{0: <60} {1:?}",
             font.file_name().unwrap().to_str().unwrap(),
             result
         );
