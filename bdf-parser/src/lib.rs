@@ -15,7 +15,7 @@ pub type BoundingBox = (u32, u32, i32, i32);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BDFFont {
-    metadata: Metadata,
+    metadata: Option<Metadata>,
     glyphs: Vec<Glyph>,
 }
 
@@ -36,16 +36,8 @@ impl<'a> BDFParser<'a> {
 named!(
     inner_bdf<BDFFont>,
     ws!(do_parse!(
-        opt!(header) >> opt!(properties) >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
-            BDFFont {
-                metadata: Metadata {
-                    version: 2.1,
-                    name: String::from("\"open_iconic_all_1x\""),
-                    size: (16, 75, 75),
-                    bounding_box: (16, 16, 0, 0),
-                },
-                glyphs,
-            }
+        metadata: opt!(header) >> opt!(properties) >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
+            BDFFont { metadata, glyphs }
         })
     ))
 );
@@ -65,9 +57,9 @@ mod tests {
     #[test]
     fn it_parses_a_font_file() {
         let chardata = r#"STARTFONT 2.1
-FONT "open_iconic_all_1x"
+FONT "test font"
 SIZE 16 75 75
-FONTBOUNDINGBOX 16 16 0 0
+FONTBOUNDINGBOX 16 24 0 0
 STARTPROPERTIES 3
 COPYRIGHT "https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE"
 FONT_ASCENT 0
@@ -99,12 +91,12 @@ ENDFONT
             IResult::Done(
                 EMPTY,
                 BDFFont {
-                    metadata: Metadata {
+                    metadata: Some(Metadata {
                         version: 2.1,
-                        name: String::from("\"open_iconic_all_1x\""),
+                        name: <String>::from("\"test font\""),
                         size: (16, 75, 75),
-                        bounding_box: (16, 16, 0, 0),
-                    },
+                        bounding_box: (16, 24, 0, 0),
+                    }),
                     glyphs: vec![
                         Glyph {
                             bitmap: vec![0x1f01],
@@ -160,12 +152,12 @@ ENDCHAR
             IResult::Done(
                 EMPTY,
                 BDFFont {
-                    metadata: Metadata {
+                    metadata: Some(Metadata {
                         version: 2.1,
-                        name: String::from("\"open_iconic_all_1x\""),
+                        name: <String>::from("\"open_iconic_all_1x\""),
                         size: (16, 75, 75),
                         bounding_box: (16, 16, 0, 0),
-                    },
+                    }),
                     glyphs: vec![
                         Glyph {
                             bitmap: vec![0x1f01],
