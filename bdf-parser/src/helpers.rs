@@ -29,12 +29,27 @@ named!(pub optional_comments<Vec<String>>, many0!(comment));
 
 named!(pub numchars<u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
 
+named!(pub take_until_line_ending, alt_complete!(take_until!("\r\n") | take_until!("\n")));
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use nom::IResult;
 
     const EMPTY: &[u8] = &[];
+
+    #[test]
+    fn it_takes_until_any_line_ending() {
+        assert_eq!(
+            take_until_line_ending("Unix line endings\n".as_bytes()),
+            IResult::Done("\n".as_bytes(), "Unix line endings".as_bytes())
+        );
+
+        assert_eq!(
+            take_until_line_ending("Windows line endings\r\n".as_bytes()),
+            IResult::Done("\r\n".as_bytes(), "Windows line endings".as_bytes())
+        );
+    }
 
     #[test]
     fn it_parses_comments() {

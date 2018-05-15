@@ -15,7 +15,7 @@ pub struct Glyph {
 
 named!(
     glyph_name<String>,
-    flat_map!(take_until!("\n"), parse_to!(String))
+    flat_map!(recognize!(take_until_line_ending), parse_to!(String))
 );
 
 named!(

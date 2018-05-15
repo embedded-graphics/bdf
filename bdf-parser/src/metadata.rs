@@ -14,7 +14,7 @@ pub struct Metadata {
 named!(
     metadata_version<f32>,
     flat_map!(
-        preceded!(tag!("STARTFONT "), take_until!("\n")),
+        preceded!(tag!("STARTFONT "), take_until_line_ending),
         parse_to!(f32)
     )
 );
@@ -22,7 +22,7 @@ named!(
 named!(
     metadata_name<String>,
     flat_map!(
-        preceded!(tag!("FONT "), take_until!("\n")),
+        preceded!(tag!("FONT "), take_until_line_ending),
         parse_to!(String)
     )
 );

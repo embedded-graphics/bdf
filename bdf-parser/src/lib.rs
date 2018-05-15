@@ -176,4 +176,33 @@ ENDCHAR
             )
         );
     }
+
+    #[test]
+    fn it_handles_windows_line_endings() {
+        let windows_line_endings = "STARTFONT 2.1\r\nFONT \"windows_test\"\r\nSIZE 10 96 96\r\nFONTBOUNDINGBOX 8 16 0 -4\r\nSTARTPROPERTIES 16\r\nENDPROPERTIES\r\nCHARS 256\r\nSTARTCHAR 0\r\nENCODING 0\r\nSWIDTH 600 0\r\nDWIDTH 8 0\r\nBBX 8 16 0 -4\r\nBITMAP\r\nD5\r\nENDCHAR\r\nENDFONT\r\n";
+        let out = bdf(&windows_line_endings.as_bytes());
+
+        assert_eq!(
+            out,
+            IResult::Done(
+                EMPTY,
+                BDFFont {
+                    metadata: Some(Metadata {
+                        version: 2.1,
+                        name: <String>::from("\"windows_test\""),
+                        size: (10, 96, 96),
+                        bounding_box: (8, 16, 0, -4),
+                    }),
+                    glyphs: vec![
+                        Glyph {
+                            bitmap: vec![0xd5],
+                            bounding_box: (8, 16, 0, -4),
+                            charcode: 0,
+                            name: "0".to_string(),
+                        },
+                    ],
+                }
+            )
+        );
+    }
 }
