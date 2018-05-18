@@ -1,7 +1,9 @@
 use nom::*;
 
+use nom::types::CompleteByteSlice;
+
 named!(
-    pub parse_to_i32<i32>,
+    pub parse_to_i32<CompleteByteSlice, i32>,
     flat_map!(
         recognize!(preceded!(opt!(one_of!("+-")), digit)),
         parse_to!(i32)
@@ -9,12 +11,12 @@ named!(
 );
 
 named!(
-    pub parse_to_u32<u32>,
+    pub parse_to_u32<CompleteByteSlice, u32>,
     flat_map!(recognize!(digit), parse_to!(u32))
 );
 
 named!(
-    pub comment<String>,
+    pub comment<CompleteByteSlice, String>,
     flat_map!(
         delimited!(
             alt!(tag!("COMMENT ") | tag!("COMMENT")),
@@ -25,43 +27,48 @@ named!(
     )
 );
 
-named!(pub optional_comments<Vec<String>>, many0!(comment));
+named!(pub optional_comments<CompleteByteSlice, Vec<String>>, many0!(comment));
 
-named!(pub numchars<u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
+named!(pub numchars<CompleteByteSlice, u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
 
-named!(pub take_until_line_ending, alt_complete!(take_until!("\r\n") | take_until!("\n")));
+named!(pub take_until_line_ending<CompleteByteSlice, CompleteByteSlice>, alt_complete!(take_until!("\r\n") | take_until!("\n")));
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::IResult;
 
-    const EMPTY: &[u8] = &[];
+    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
 
     #[test]
     fn it_takes_until_any_line_ending() {
         assert_eq!(
-            take_until_line_ending("Unix line endings\n".as_bytes()),
-            IResult::Done("\n".as_bytes(), "Unix line endings".as_bytes())
+            take_until_line_ending(CompleteByteSlice(b"Unix line endings\n")),
+            Ok((
+                CompleteByteSlice(b"\n"),
+                CompleteByteSlice(b"Unix line endings")
+            ))
         );
 
         assert_eq!(
-            take_until_line_ending("Windows line endings\r\n".as_bytes()),
-            IResult::Done("\r\n".as_bytes(), "Windows line endings".as_bytes())
+            take_until_line_ending(CompleteByteSlice(b"Windows line endings\r\n")),
+            Ok((
+                CompleteByteSlice(b"\r\n"),
+                CompleteByteSlice(b"Windows line endings")
+            ))
         );
     }
 
     #[test]
     fn it_parses_comments() {
-        let comment_text = "COMMENT test text\n";
-        let out = comment(comment_text.as_bytes());
+        let comment_text = b"COMMENT test text\n";
+        let out = comment(CompleteByteSlice(comment_text));
 
-        assert_eq!(out, IResult::Done(EMPTY, "test text".to_string()));
+        assert_eq!(out, Ok((EMPTY, "test text".to_string())));
 
         // EMPTY comments
         assert_eq!(
-            comment("COMMENT\n".as_bytes()),
-            IResult::Done(EMPTY, "".to_string())
+            comment(CompleteByteSlice(b"COMMENT\n")),
+            Ok((EMPTY, "".to_string()))
         );
     }
 }

@@ -13,7 +13,6 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
 use bdf_parser::*;
-use nom::*;
 
 pub fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -75,14 +74,13 @@ pub fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let out = parser.parse();
 
     match out {
-        IResult::Done(rest, _parsed) => {
+        Ok((rest, _parsed)) => {
             if rest.len() > 0 {
                 Err(format!("{} remaining bytes to parse", rest.len()))
             } else {
                 Ok(())
             }
         }
-        IResult::Error(_) => Err(format!("Error")),
         _ => Err(format!("Other error")),
     }
 }

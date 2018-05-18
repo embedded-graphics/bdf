@@ -9,6 +9,7 @@ mod properties;
 use glyph::*;
 use helpers::*;
 use metadata::*;
+use nom::types::CompleteByteSlice;
 use properties::*;
 
 pub type BoundingBox = (u32, u32, i32, i32);
@@ -28,13 +29,13 @@ impl<'a> BDFParser<'a> {
         Self { source }
     }
 
-    pub fn parse(&self) -> nom::IResult<&[u8], BDFFont> {
-        bdf(self.source.as_bytes())
+    pub fn parse(&self) -> Result<(CompleteByteSlice, BDFFont), nom::Err<CompleteByteSlice>> {
+        bdf(CompleteByteSlice(&self.source.as_bytes()))
     }
 }
 
 named!(
-    inner_bdf<BDFFont>,
+    inner_bdf<CompleteByteSlice, BDFFont>,
     ws!(do_parse!(
         metadata: opt!(header) >> opt!(properties) >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
             BDFFont { metadata, glyphs }
@@ -43,16 +44,15 @@ named!(
 );
 
 named!(
-    bdf<BDFFont>,
+    bdf<CompleteByteSlice, BDFFont>,
     alt_complete!(ws!(terminated!(inner_bdf, tag!("ENDFONT"))) | inner_bdf)
 );
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::IResult;
 
-    const EMPTY: &[u8] = &[];
+    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
 
     #[test]
     fn it_parses_a_font_file() {
@@ -84,11 +84,11 @@ ENDCHAR
 ENDFONT
 "#;
 
-        let out = bdf(&chardata.as_bytes());
+        let out = bdf(CompleteByteSlice(&chardata.as_bytes()));
 
         assert_eq!(
             out,
-            IResult::Done(
+            Ok((
                 EMPTY,
                 BDFFont {
                     metadata: Some(Metadata {
@@ -112,7 +112,7 @@ ENDFONT
                         },
                     ],
                 }
-            )
+            ))
         );
     }
 
@@ -145,11 +145,11 @@ BITMAP
 ENDCHAR
 "#;
 
-        let out = bdf(&chardata.as_bytes());
+        let out = bdf(CompleteByteSlice(&chardata.as_bytes()));
 
         assert_eq!(
             out,
-            IResult::Done(
+            Ok((
                 EMPTY,
                 BDFFont {
                     metadata: Some(Metadata {
@@ -173,18 +173,18 @@ ENDCHAR
                         },
                     ],
                 }
-            )
+            ))
         );
     }
 
     #[test]
     fn it_handles_windows_line_endings() {
         let windows_line_endings = "STARTFONT 2.1\r\nFONT \"windows_test\"\r\nSIZE 10 96 96\r\nFONTBOUNDINGBOX 8 16 0 -4\r\nSTARTPROPERTIES 16\r\nENDPROPERTIES\r\nCHARS 256\r\nSTARTCHAR 0\r\nENCODING 0\r\nSWIDTH 600 0\r\nDWIDTH 8 0\r\nBBX 8 16 0 -4\r\nBITMAP\r\nD5\r\nENDCHAR\r\nENDFONT\r\n";
-        let out = bdf(&windows_line_endings.as_bytes());
+        let out = bdf(CompleteByteSlice(&windows_line_endings.as_bytes()));
 
         assert_eq!(
             out,
-            IResult::Done(
+            Ok((
                 EMPTY,
                 BDFFont {
                     metadata: Some(Metadata {
@@ -202,7 +202,7 @@ ENDCHAR
                         },
                     ],
                 }
-            )
+            ))
         );
     }
 }

@@ -1,8 +1,10 @@
+use nom::types::CompleteByteSlice;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Properties;
 
 named!(
-    pub properties<Properties>,
+    pub properties<CompleteByteSlice, Properties>,
     map!(
         ws!(delimited!(
             tag!("STARTPROPERTIES"),
