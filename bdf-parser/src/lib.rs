@@ -18,6 +18,7 @@ pub type BoundingBox = (u32, u32, i32, i32);
 pub struct BDFFont {
     metadata: Option<Metadata>,
     glyphs: Vec<Glyph>,
+    properties: Option<Properties>
 }
 
 pub struct BDFParser<'a> {
@@ -37,8 +38,8 @@ impl<'a> BDFParser<'a> {
 named!(
     inner_bdf<CompleteByteSlice, BDFFont>,
     ws!(do_parse!(
-        metadata: opt!(header) >> opt!(properties) >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
-            BDFFont { metadata, glyphs }
+        metadata: opt!(header) >> properties: opt!(properties) >> opt!(numchars) >> glyphs: many0!(glyph) >> ({
+            BDFFont { properties, metadata, glyphs }
         })
     ))
 );
@@ -47,6 +48,9 @@ named!(
     bdf<CompleteByteSlice, BDFFont>,
     alt_complete!(ws!(terminated!(inner_bdf, tag!("ENDFONT"))) | inner_bdf)
 );
+
+#[cfg(test)]
+#[macro_use] extern crate maplit;
 
 #[cfg(test)]
 mod tests {
@@ -93,7 +97,7 @@ ENDFONT
                 BDFFont {
                     metadata: Some(Metadata {
                         version: 2.1,
-                        name: <String>::from("\"test font\""),
+                        name: String::from("\"test font\""),
                         size: (16, 75, 75),
                         bounding_box: (16, 24, 0, 0),
                     }),
@@ -111,6 +115,11 @@ ENDFONT
                             name: "000".to_string(),
                         },
                     ],
+                    properties: Some(hashmap!{
+                        "COPYRIGHT".into() => PropertyValue::Text("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".into()),
+                        "FONT_ASCENT".into() => PropertyValue::Int(0),
+                        "FONT_DESCENT".into() => PropertyValue::Int(0),
+                    })
                 }
             ))
         );
@@ -154,7 +163,7 @@ ENDCHAR
                 BDFFont {
                     metadata: Some(Metadata {
                         version: 2.1,
-                        name: <String>::from("\"open_iconic_all_1x\""),
+                        name: String::from("\"open_iconic_all_1x\""),
                         size: (16, 75, 75),
                         bounding_box: (16, 16, 0, 0),
                     }),
@@ -172,6 +181,11 @@ ENDCHAR
                             name: "000".to_string(),
                         },
                     ],
+                    properties: Some(hashmap!{
+                        "COPYRIGHT".into() => PropertyValue::Text("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".into()),
+                        "FONT_ASCENT".into() => PropertyValue::Int(0),
+                        "FONT_DESCENT".into() => PropertyValue::Int(0),
+                    })
                 }
             ))
         );
@@ -179,7 +193,7 @@ ENDCHAR
 
     #[test]
     fn it_handles_windows_line_endings() {
-        let windows_line_endings = "STARTFONT 2.1\r\nFONT \"windows_test\"\r\nSIZE 10 96 96\r\nFONTBOUNDINGBOX 8 16 0 -4\r\nSTARTPROPERTIES 16\r\nENDPROPERTIES\r\nCHARS 256\r\nSTARTCHAR 0\r\nENCODING 0\r\nSWIDTH 600 0\r\nDWIDTH 8 0\r\nBBX 8 16 0 -4\r\nBITMAP\r\nD5\r\nENDCHAR\r\nENDFONT\r\n";
+        let windows_line_endings = "STARTFONT 2.1\r\nFONT \"windows_test\"\r\nSIZE 10 96 96\r\nFONTBOUNDINGBOX 8 16 0 -4\r\nCHARS 256\r\nSTARTCHAR 0\r\nENCODING 0\r\nSWIDTH 600 0\r\nDWIDTH 8 0\r\nBBX 8 16 0 -4\r\nBITMAP\r\nD5\r\nENDCHAR\r\nENDFONT\r\n";
         let out = bdf(CompleteByteSlice(&windows_line_endings.as_bytes()));
 
         assert_eq!(
@@ -189,7 +203,7 @@ ENDCHAR
                 BDFFont {
                     metadata: Some(Metadata {
                         version: 2.1,
-                        name: <String>::from("\"windows_test\""),
+                        name: String::from("\"windows_test\""),
                         size: (10, 96, 96),
                         bounding_box: (8, 16, 0, -4),
                     }),
@@ -201,6 +215,7 @@ ENDCHAR
                             name: "0".to_string(),
                         },
                     ],
+                    properties: None
                 }
             ))
         );
