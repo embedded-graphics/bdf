@@ -1,5 +1,12 @@
-use nom::types::CompleteByteSlice;
-use nom::*;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_until},
+    character::complete::{digit1, multispace0, space1},
+    combinator::{map, map_opt, map_parser},
+    multi::many0,
+    sequence::delimited,
+    IResult, ParseTo,
+};
 use std::collections::HashMap;
 
 use super::helpers::*;
@@ -12,70 +19,62 @@ pub enum PropertyValue {
 
 pub type Properties = HashMap<String, PropertyValue>;
 
-named!(property_value_string<CompleteByteSlice, PropertyValue>,
-    map!(
-        flat_map!(
-            ws!(delimited!(tag!("\""), take_until!("\""), tag!("\""))),
-            parse_to!(String)
+fn property_value_string(input: &[u8]) -> IResult<&[u8], PropertyValue> {
+    map(
+        map_opt(
+            delimited(tag("\""), take_until("\""), tag("\"")),
+            |s: &[u8]| s.parse_to(),
         ),
-        |str| PropertyValue::Text(str)
-    )
-);
+        |s| PropertyValue::Text(s),
+    )(input)
+}
 
-named!(property_value_int<CompleteByteSlice, PropertyValue>,
-    ws!(map!(
-        parse_to_i32,
-        |num| PropertyValue::Int(num)
-    ))
-);
+fn property_value_int(input: &[u8]) -> IResult<&[u8], PropertyValue> {
+    map(parse_to_i32, |i| PropertyValue::Int(i))(input)
+}
 
-named!(property_value<CompleteByteSlice, PropertyValue>, ws!(alt!(
-    property_value_string |
-    property_value_int
-)));
+fn property_value(input: &[u8]) -> IResult<&[u8], PropertyValue> {
+    alt((property_value_string, property_value_int))(input)
+}
 
-named!(property<CompleteByteSlice, (String, PropertyValue)>,
-    ws!(do_parse!(
-        key: flat_map!(take_until!(" "), parse_to!(String)) >> value: property_value >> ({
-            (key, value)
-        })
-    ))
-);
+fn property(input: &[u8]) -> IResult<&[u8], (String, PropertyValue)> {
+    let (input, _) = multispace0(input)?;
+    let (input, key) = map_opt(take_until(" "), |s: &[u8]| s.parse_to())(input)?;
+    let (input, _) = space1(input)?;
+    let (input, value) = property_value(input)?;
+    let (input, _) = multispace0(input)?;
 
-named!(num_properties<CompleteByteSlice, u32>,
-    flat_map!(
-        ws!(preceded!(tag!("STARTPROPERTIES"), digit)),
-        parse_to!(u32)
-    )
-);
+    Ok((input, (key, value)))
+}
 
-named!(
-    pub properties<CompleteByteSlice, Properties>,
-    map!(
-        flat_map!(
-            delimited!(
+fn num_properties(input: &[u8]) -> IResult<&[u8], u32> {
+    statement("STARTPROPERTIES", map_opt(digit1, |n: &[u8]| n.parse_to()))(input)
+}
+
+pub fn properties(input: &[u8]) -> IResult<&[u8], Properties> {
+    map(
+        map_parser(
+            delimited(
                 num_properties,
-                take_until!("ENDPROPERTIES"),
-                tag!("ENDPROPERTIES")
+                take_until("ENDPROPERTIES"),
+                tag("ENDPROPERTIES"),
             ),
-            many0!(property)
+            many0(property),
         ),
-        |res| {
-            res.iter().cloned().collect::<Properties>()
-        }
-    )
-);
+        |res| res.iter().cloned().collect::<Properties>(),
+    )(input)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
+    const EMPTY: &[u8] = &[];
 
     #[test]
     fn it_parses_whitespacey_properties() {
         assert_eq!(
-            property(CompleteByteSlice(b"KEY   \"VALUE\"")),
+            property(b"KEY   \"VALUE\""),
             Ok((
                 EMPTY,
                 ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
@@ -83,7 +82,7 @@ mod tests {
         );
 
         assert_eq!(
-            property(CompleteByteSlice(b"KEY   \"RANDOM WORDS AND STUFF\"")),
+            property(b"KEY   \"RANDOM WORDS AND STUFF\""),
             Ok((
                 EMPTY,
                 (
@@ -97,7 +96,7 @@ mod tests {
     #[test]
     fn it_parses_string_properties() {
         assert_eq!(
-            property(CompleteByteSlice(b"KEY \"VALUE\"")),
+            property(b"KEY \"VALUE\""),
             Ok((
                 EMPTY,
                 ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
@@ -108,7 +107,7 @@ mod tests {
     #[test]
     fn it_parses_integer_properties() {
         assert_eq!(
-            property(CompleteByteSlice(b"POSITIVE_NUMBER 10")),
+            property(b"POSITIVE_NUMBER 10"),
             Ok((
                 EMPTY,
                 ("POSITIVE_NUMBER".to_string(), PropertyValue::Int(10i32))
@@ -116,7 +115,7 @@ mod tests {
         );
 
         assert_eq!(
-            property(CompleteByteSlice(b"NEGATIVE_NUMBER -10")),
+            property(b"NEGATIVE_NUMBER -10"),
             Ok((
                 EMPTY,
                 ("NEGATIVE_NUMBER".to_string(), PropertyValue::Int(-10i32))
@@ -130,7 +129,7 @@ mod tests {
 ENDPROPERTIES"#;
 
         assert_eq!(
-            properties(CompleteByteSlice(&input.as_bytes())),
+            properties(&input.as_bytes()),
             Ok((EMPTY, Properties::new()))
         );
     }
@@ -147,9 +146,6 @@ ENDPROPERTIES"#;
             "INTEGER".into() => PropertyValue::Int(10),
         ];
 
-        assert_eq!(
-            properties(CompleteByteSlice(&input.as_bytes())),
-            Ok((EMPTY, expected))
-        );
+        assert_eq!(properties(&input.as_bytes()), Ok((EMPTY, expected)));
     }
 }

@@ -19,7 +19,7 @@ exclude = [
 travis-ci = { repository = "jamwaffles/embedded-fonts", branch = "master" }
 
 [dependencies]
-nom = "4.0.0"
+nom = "5.0.0"
 
 [dev-dependencies]
 chardet = "0.2.4"

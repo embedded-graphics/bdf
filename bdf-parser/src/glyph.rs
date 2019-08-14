@@ -1,8 +1,12 @@
-use nom::types::CompleteByteSlice;
-use nom::*;
+use nom::{
+    bytes::complete::{tag, take_until},
+    character::{complete::multispace0, is_hex_digit, streaming::space1},
+    combinator::{map_opt, opt},
+    sequence::{delimited, separated_pair},
+    IResult, ParseTo,
+};
 
-use super::BoundingBox;
-use super::helpers::*;
+use super::{helpers::*, BoundingBox};
 
 type Vec2 = (u32, u32);
 
@@ -14,125 +18,112 @@ pub struct Glyph {
     pub bitmap: Vec<u32>,
 }
 
-named!(
-    glyph_name<CompleteByteSlice, String>,
-    flat_map!(recognize!(take_until_line_ending), parse_to!(String))
-);
+fn glyph_startchar(input: &[u8]) -> IResult<&[u8], String> {
+    statement(
+        "STARTCHAR",
+        map_opt(take_until_line_ending, |name| name.parse_to()),
+    )(input)
+}
 
-named!(
-    glyph_charcode<CompleteByteSlice, i32>,
-    ws!(preceded!(tag!("ENCODING"), parse_to_i32))
-);
+fn glyph_charcode(input: &[u8]) -> IResult<&[u8], i32> {
+    statement("ENCODING", parse_to_i32)(input)
+}
 
-named!(
-    glyph_dwidth<CompleteByteSlice, Vec2>,
-    ws!(preceded!(
-        tag!("DWIDTH"),
-        tuple!(parse_to_u32, parse_to_u32)
-    ))
-);
+fn glyph_dwidth(input: &[u8]) -> IResult<&[u8], Vec2> {
+    statement("DWIDTH", unsigned_xy)(input)
+}
 
-named!(
-    glyph_swidth<CompleteByteSlice, Vec2>,
-    ws!(preceded!(
-        tag!("SWIDTH"),
-        tuple!(parse_to_u32, parse_to_u32)
-    ))
-);
+fn glyph_swidth(input: &[u8]) -> IResult<&[u8], Vec2> {
+    statement("SWIDTH", unsigned_xy)(input)
+}
 
-named!(
-    glyph_bounding_box<CompleteByteSlice, BoundingBox>,
-    ws!(preceded!(
-        tag!("BBX"),
-        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
-    ))
-);
+fn glyph_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
+    statement("BBX", separated_pair(unsigned_xy, space1, signed_xy))(input)
+}
 
-named!(
-    glyph_bitmap<CompleteByteSlice, Vec<u32>>,
-    map!(
-        ws!(delimited!(
-            tag!("BITMAP"),
-            take_until!("ENDCHAR"),
-            tag!("ENDCHAR")
-        )),
-        |res| {
-            res.to_vec()
-                .iter()
-                .filter(|d| is_hex_digit(**d))
-                .collect::<Vec<&u8>>()
-                .chunks(8)
-                .map(|c| {
-                    c.iter()
-                        .rev()
-                        .enumerate()
-                        .map(|(k, &&v)| {
-                            let digit = v as char;
-                            digit.to_digit(16).unwrap_or(0) << (k * 4)
-                        })
-                        .sum()
-                })
-                .collect()
-        }
-    )
-);
+fn glyph_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u32>> {
+    let (input, _) = multispace0(input)?;
+    let (input, glyph_data) =
+        delimited(tag("BITMAP"), take_until("ENDCHAR"), tag("ENDCHAR"))(input)?;
 
-named!(
-    pub glyph<CompleteByteSlice, Glyph>,
-    ws!(preceded!(
-        tag!("STARTCHAR"),
-        do_parse!(
-            name: glyph_name >> charcode: glyph_charcode >> opt!(glyph_swidth) >> opt!(glyph_dwidth)
-                >> bounding_box: glyph_bounding_box >> bitmap: glyph_bitmap >> ({
-                Glyph {
-                    bitmap,
-                    bounding_box,
-                    charcode,
-                    name,
-                }
+    Ok((
+        input,
+        glyph_data
+            .to_vec()
+            .iter()
+            .filter(|d| is_hex_digit(**d))
+            .collect::<Vec<&u8>>()
+            .chunks(8)
+            .map(|c| {
+                c.iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(k, &&v)| {
+                        let digit = v as char;
+                        digit.to_digit(16).unwrap_or(0) << (k * 4)
+                    })
+                    .sum()
             })
-        )
+            .collect(),
     ))
-);
+}
+
+pub fn glyph(input: &[u8]) -> IResult<&[u8], Glyph> {
+    let (input, name) = glyph_startchar(input)?;
+    let (input, charcode) = glyph_charcode(input)?;
+    let (input, _) = opt(glyph_swidth)(input)?;
+    let (input, _) = opt(glyph_dwidth)(input)?;
+    let (input, bounding_box) = glyph_bounding_box(input)?;
+    let (input, bitmap) = glyph_bitmap(input)?;
+
+    Ok((
+        input,
+        Glyph {
+            bitmap,
+            bounding_box,
+            charcode,
+            name,
+        },
+    ))
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
+    const EMPTY: &[u8] = &[];
 
     #[test]
     fn it_parses_bitmap_data() {
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(b"BITMAP\n7e\nENDCHAR")),
+            glyph_bitmap(b"BITMAP\n7e\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![0x7e]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(b"BITMAP\nff\nENDCHAR")),
+            glyph_bitmap(b"BITMAP\nff\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![255]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(b"BITMAP\nCCCC\nENDCHAR")),
+            glyph_bitmap(b"BITMAP\nCCCC\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![0xcccc]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(b"BITMAP\nffffffff\nENDCHAR")),
+            glyph_bitmap(b"BITMAP\nffffffff\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![0xffffffff]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(b"BITMAP\nffffffff\naaaaaaaa\nENDCHAR")),
+            glyph_bitmap(b"BITMAP\nffffffff\naaaaaaaa\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![0xffffffff, 0xaaaaaaaa]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(
-                b"BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR"
-            )),
+            glyph_bitmap(b"BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR".as_ref()),
             Ok((EMPTY, vec![0xffffffff, 0xaaaaaaaa]))
         );
         assert_eq!(
-            glyph_bitmap(CompleteByteSlice(
+            glyph_bitmap(
                 b"BITMAP\n00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00\nENDCHAR"
-            )),
+                    .as_ref()
+            ),
             Ok((EMPTY, vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000]))
         );
     }
@@ -163,7 +154,7 @@ BITMAP
 00
 ENDCHAR"#;
 
-        let out = glyph(CompleteByteSlice(chardata.as_bytes()));
+        let out = glyph(chardata.as_bytes());
 
         assert_eq!(
             out,
@@ -173,7 +164,7 @@ ENDCHAR"#;
                     name: "ZZZZ".to_string(),
                     charcode: 65,
                     bitmap: vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000],
-                    bounding_box: (8, 16, 0, -2),
+                    bounding_box: ((8, 16), (0, -2)),
                 }
             ))
         );
@@ -189,7 +180,7 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = glyph(CompleteByteSlice(chardata.as_bytes()));
+        let out = glyph(chardata.as_bytes());
 
         assert_eq!(
             out,
@@ -197,7 +188,7 @@ ENDCHAR"#;
                 EMPTY,
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: (0, 0, 0, 0),
+                    bounding_box: ((0, 0), (0, 0)),
                     charcode: -1i32,
                     name: "000".to_string(),
                 }
@@ -215,7 +206,7 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = glyph(CompleteByteSlice(chardata.as_bytes()));
+        let out = glyph(chardata.as_bytes());
 
         assert_eq!(
             out,
@@ -223,7 +214,7 @@ ENDCHAR"#;
                 EMPTY,
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: (0, 0, 0, 0),
+                    bounding_box: ((0, 0), (0, 0)),
                     charcode: 0,
                     name: "000".to_string(),
                 }

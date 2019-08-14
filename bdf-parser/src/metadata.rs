@@ -1,9 +1,12 @@
-use nom::types::CompleteByteSlice;
+use super::{helpers::*, BoundingBox};
+use nom::{
+    character::complete::{multispace0, space1},
+    combinator::map_opt,
+    sequence::{preceded, separated_pair},
+    IResult, ParseTo,
+};
 
-use super::BoundingBox;
-use super::helpers::*;
-
-pub type FontSize = (i32, u32, u32);
+pub type FontSize = (i32, (u32, u32));
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
@@ -12,72 +15,82 @@ pub struct Metadata {
     pub size: FontSize,
     pub bounding_box: BoundingBox,
 }
+fn metadata_version(input: &[u8]) -> IResult<&[u8], f32> {
+    map_opt(
+        statement("STARTFONT", take_until_line_ending),
+        |v: &[u8]| v.parse_to(),
+    )(input)
+}
 
-named!(
-    metadata_version<CompleteByteSlice, f32>,
-    flat_map!(
-        ws!(preceded!(tag!("STARTFONT"), take_until_line_ending)),
-        parse_to!(f32)
-    )
-);
+fn metadata_name(input: &[u8]) -> IResult<&[u8], String> {
+    map_opt(
+        statement("FONT", take_until_line_ending),
+        |name: &[u8]| name.parse_to(),
+    )(input)
+}
 
-named!(
-    metadata_name<CompleteByteSlice, String>,
-    flat_map!(
-        preceded!(tag!("FONT "), take_until_line_ending),
-        parse_to!(String)
-    )
-);
+fn metadata_size(input: &[u8]) -> IResult<&[u8], FontSize> {
+    statement("SIZE", separated_pair(parse_to_i32, space1, unsigned_xy))(input)
+}
 
-named!(
-    metadata_size<CompleteByteSlice, FontSize>,
-    ws!(preceded!(
-        tag!("SIZE"),
-        tuple!(parse_to_i32, parse_to_u32, parse_to_u32)
+fn metadata_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
+    statement(
+        "FONTBOUNDINGBOX",
+        separated_pair(unsigned_xy, space1, signed_xy),
+    )(input)
+}
+
+pub fn header(input: &[u8]) -> IResult<&[u8], Metadata> {
+    let (input, version) = preceded(optional_comments, metadata_version)(input)?;
+    let (input, name) = preceded(optional_comments, metadata_name)(input)?;
+    let (input, size) = preceded(optional_comments, metadata_size)(input)?;
+    let (input, bounding_box) = preceded(optional_comments, metadata_bounding_box)(input)?;
+    let (input, _) = optional_comments(input)?;
+    let (input, _) = multispace0(input)?;
+
+    Ok((
+        input,
+        Metadata {
+            version,
+            name,
+            size,
+            bounding_box,
+        },
     ))
-);
-
-named!(
-    metadata_bounding_box<CompleteByteSlice, BoundingBox>,
-    ws!(preceded!(
-        tag!("FONTBOUNDINGBOX"),
-        tuple!(parse_to_u32, parse_to_u32, parse_to_i32, parse_to_i32)
-    ))
-);
-
-named!(
-    pub header<CompleteByteSlice, Metadata>,
-    ws!(do_parse!(
-        optional_comments >> version: metadata_version >> optional_comments >> name: metadata_name
-            >> optional_comments >> size: metadata_size >> optional_comments
-            >> bounding_box: metadata_bounding_box >> optional_comments >> ({
-            Metadata {
-                version,
-                name,
-                size,
-                bounding_box,
-            }
-        })
-    ))
-);
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
+    const EMPTY: &[u8] = &[];
 
     #[test]
     fn it_parses_the_font_version() {
-        assert_eq!(
-            metadata_version(CompleteByteSlice(b"STARTFONT 2.1\n")),
-            Ok((EMPTY, 2.1f32))
-        );
+        assert_eq!(metadata_version(b"STARTFONT 2.1\n"), Ok((EMPTY, 2.1f32)));
 
         // Some fonts are a bit overzealous with their whitespace
+        assert_eq!(metadata_version(b"STARTFONT   2.1\n"), Ok((EMPTY, 2.1f32)));
+    }
+
+    #[test]
+    fn it_parses_header() {
+        let input = r#"STARTFONT 2.1
+FONT "test font"
+SIZE 16 75 75
+FONTBOUNDINGBOX 16 24 0 0"#;
+
         assert_eq!(
-            metadata_version(CompleteByteSlice(b"STARTFONT   2.1\n")),
-            Ok((EMPTY, 2.1f32))
+            header(input.as_bytes()),
+            Ok((
+                EMPTY,
+                Metadata {
+                    version: 2.1,
+                    name: String::from("\"test font\""),
+                    size: (16, (75, 75)),
+                    bounding_box: ((16, 24), (0, 0))
+                }
+            ))
         );
     }
 }
