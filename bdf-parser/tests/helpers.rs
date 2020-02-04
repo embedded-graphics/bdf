@@ -3,14 +3,15 @@ extern crate chardet;
 extern crate encoding;
 extern crate nom;
 
-use chardet::{detect, charset2encoding};
-use encoding::DecoderTrap;
-use encoding::label::encoding_from_whatwg_label;
-use std::fs;
-use std::fs::OpenOptions;
-use std::io;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
+use chardet::{charset2encoding, detect};
+use encoding::{label::encoding_from_whatwg_label, DecoderTrap};
+use std::{
+    fs,
+    fs::OpenOptions,
+    io,
+    io::prelude::*,
+    path::{Path, PathBuf},
+};
 
 use bdf_parser::*;
 

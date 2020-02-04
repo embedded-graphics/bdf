@@ -1,74 +1,103 @@
-use nom::*;
+use nom::{
+    bytes::complete::{tag, take_until, take_while},
+    character::complete::{digit1, line_ending, multispace0, one_of, space0, space1},
+    combinator::{map_opt, opt, recognize},
+    multi::many0,
+    sequence::{delimited, preceded, separated_pair},
+    IResult, ParseTo,
+};
 
-use nom::types::CompleteByteSlice;
+pub fn parse_to_i32(input: &[u8]) -> IResult<&[u8], i32> {
+    map_opt(
+        recognize(preceded(opt(one_of("+-")), digit1)),
+        |i: &[u8]| i.parse_to(),
+    )(input)
+}
 
-named!(
-    pub parse_to_i32<CompleteByteSlice, i32>,
-    flat_map!(
-        recognize!(preceded!(opt!(one_of!("+-")), digit)),
-        parse_to!(i32)
-    )
-);
+pub fn parse_to_u32(input: &[u8]) -> IResult<&[u8], u32> {
+    map_opt(recognize(digit1), |i: &[u8]| i.parse_to())(input)
+}
 
-named!(
-    pub parse_to_u32<CompleteByteSlice, u32>,
-    flat_map!(recognize!(digit), parse_to!(u32))
-);
-
-named!(
-    pub comment<CompleteByteSlice, String>,
-    flat_map!(
-        delimited!(
-            alt!(tag!("COMMENT ") | tag!("COMMENT")),
-            take_until!("\n"),
-            line_ending
+fn comment(input: &[u8]) -> IResult<&[u8], String> {
+    map_opt(
+        delimited(
+            tag("COMMENT"),
+            opt(preceded(space1, take_until("\n"))),
+            line_ending,
         ),
-        parse_to!(String)
-    )
-);
+        |c: Option<&[u8]>| c.map_or(Some(String::from("")), |c| c.parse_to()),
+    )(input)
+}
 
-named!(pub optional_comments<CompleteByteSlice, Vec<String>>, many0!(comment));
+pub fn optional_comments(input: &[u8]) -> IResult<&[u8], Vec<String>> {
+    preceded(multispace0, many0(comment))(input)
+}
 
-named!(pub numchars<CompleteByteSlice, u32>, ws!(preceded!(tag!("CHARS"), parse_to_u32)));
+pub fn numchars(input: &[u8]) -> IResult<&[u8], u32> {
+    preceded(
+        space0,
+        preceded(tag("CHARS"), preceded(space0, parse_to_u32)),
+    )(input)
+}
 
-named!(pub take_until_line_ending<CompleteByteSlice, CompleteByteSlice>, alt_complete!(take_until!("\r\n") | take_until!("\n")));
+pub fn take_until_line_ending(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    take_while(|c| c != b'\n' && c != b'\r')(input)
+}
+
+pub fn statement<'a, O, F>(
+    keyword: &'a str,
+    parameters: F,
+) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], O>
+where
+    F: Fn(&'a [u8]) -> IResult<&'a [u8], O>,
+{
+    move |input: &[u8]| {
+        let (input, _) = multispace0(input)?;
+        let (input, _) = tag(keyword)(input)?;
+        let (input, _) = space1(input)?;
+        let (input, p) = parameters(input)?;
+        let (input, _) = space0(input)?;
+        let (input, _) = opt(line_ending)(input)?;
+
+        Ok((input, p))
+    }
+}
+
+pub fn signed_xy(input: &[u8]) -> IResult<&[u8], (i32, i32)> {
+    separated_pair(parse_to_i32, space1, parse_to_i32)(input)
+}
+
+pub fn unsigned_xy(input: &[u8]) -> IResult<&[u8], (u32, u32)> {
+    separated_pair(parse_to_u32, space1, parse_to_u32)(input)
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EMPTY: CompleteByteSlice = CompleteByteSlice(b"");
+    const EMPTY: &[u8] = &[];
 
     #[test]
     fn it_takes_until_any_line_ending() {
         assert_eq!(
-            take_until_line_ending(CompleteByteSlice(b"Unix line endings\n")),
-            Ok((
-                CompleteByteSlice(b"\n"),
-                CompleteByteSlice(b"Unix line endings")
-            ))
+            take_until_line_ending(b"Unix line endings\n"),
+            Ok((b"\n".as_ref(), b"Unix line endings".as_ref()))
         );
 
         assert_eq!(
-            take_until_line_ending(CompleteByteSlice(b"Windows line endings\r\n")),
-            Ok((
-                CompleteByteSlice(b"\r\n"),
-                CompleteByteSlice(b"Windows line endings")
-            ))
+            take_until_line_ending(b"Windows line endings\r\n"),
+            Ok((b"\r\n".as_ref(), b"Windows line endings".as_ref()))
         );
     }
 
     #[test]
     fn it_parses_comments() {
         let comment_text = b"COMMENT test text\n";
-        let out = comment(CompleteByteSlice(comment_text));
+        let out = comment(comment_text);
 
         assert_eq!(out, Ok((EMPTY, "test text".to_string())));
 
         // EMPTY comments
-        assert_eq!(
-            comment(CompleteByteSlice(b"COMMENT\n")),
-            Ok((EMPTY, "".to_string()))
-        );
+        assert_eq!(comment(b"COMMENT\n"), Ok((EMPTY, "".to_string())));
     }
 }
