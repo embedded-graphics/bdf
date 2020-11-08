@@ -17,41 +17,43 @@ pub enum PropertyValue {
     Int(i32),
 }
 
+impl PropertyValue {
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        alt((property_value_string, property_value_int))(input)
+    }
+}
+
 pub type Properties = HashMap<String, PropertyValue>;
 
-fn property_value_string(input: &[u8]) -> IResult<&[u8], PropertyValue> {
+fn property_value_string(input: &str) -> IResult<&str, PropertyValue> {
     map(
         map_opt(
             delimited(tag("\""), take_until("\""), tag("\"")),
-            |s: &[u8]| s.parse_to(),
+            |s: &str| s.parse_to(),
         ),
         |s| PropertyValue::Text(s),
     )(input)
 }
 
-fn property_value_int(input: &[u8]) -> IResult<&[u8], PropertyValue> {
+fn property_value_int(input: &str) -> IResult<&str, PropertyValue> {
     map(parse_to_i32, |i| PropertyValue::Int(i))(input)
 }
 
-fn property_value(input: &[u8]) -> IResult<&[u8], PropertyValue> {
-    alt((property_value_string, property_value_int))(input)
-}
-
-fn property(input: &[u8]) -> IResult<&[u8], (String, PropertyValue)> {
+fn property(input: &str) -> IResult<&str, (String, PropertyValue)> {
     let (input, _) = multispace0(input)?;
-    let (input, key) = map_opt(take_until(" "), |s: &[u8]| s.parse_to())(input)?;
+    let (input, key) = map_opt(take_until(" "), |s: &str| s.parse_to())(input)?;
     let (input, _) = space1(input)?;
-    let (input, value) = property_value(input)?;
+    let (input, value) = PropertyValue::parse(input)?;
     let (input, _) = multispace0(input)?;
 
     Ok((input, (key, value)))
 }
 
-fn num_properties(input: &[u8]) -> IResult<&[u8], u32> {
-    statement("STARTPROPERTIES", map_opt(digit1, |n: &[u8]| n.parse_to()))(input)
+fn num_properties(input: &str) -> IResult<&str, u32> {
+    statement("STARTPROPERTIES", map_opt(digit1, |n: &str| n.parse_to()))(input)
 }
 
-pub fn properties(input: &[u8]) -> IResult<&[u8], Properties> {
+pub fn properties(input: &str) -> IResult<&str, Properties> {
     map(
         map_parser(
             delimited(
@@ -70,22 +72,20 @@ mod tests {
     use super::*;
     use maplit::hashmap;
 
-    const EMPTY: &[u8] = &[];
-
     #[test]
     fn it_parses_whitespacey_properties() {
         assert_eq!(
-            property(b"KEY   \"VALUE\""),
+            property("KEY   \"VALUE\""),
             Ok((
-                EMPTY,
+                "",
                 ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
             ))
         );
 
         assert_eq!(
-            property(b"KEY   \"RANDOM WORDS AND STUFF\""),
+            property("KEY   \"RANDOM WORDS AND STUFF\""),
             Ok((
-                EMPTY,
+                "",
                 (
                     "KEY".to_string(),
                     PropertyValue::Text("RANDOM WORDS AND STUFF".to_string())
@@ -97,9 +97,9 @@ mod tests {
     #[test]
     fn it_parses_string_properties() {
         assert_eq!(
-            property(b"KEY \"VALUE\""),
+            property("KEY \"VALUE\""),
             Ok((
-                EMPTY,
+                "",
                 ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
             ))
         );
@@ -108,17 +108,17 @@ mod tests {
     #[test]
     fn it_parses_integer_properties() {
         assert_eq!(
-            property(b"POSITIVE_NUMBER 10"),
+            property("POSITIVE_NUMBER 10"),
             Ok((
-                EMPTY,
+                "",
                 ("POSITIVE_NUMBER".to_string(), PropertyValue::Int(10i32))
             ))
         );
 
         assert_eq!(
-            property(b"NEGATIVE_NUMBER -10"),
+            property("NEGATIVE_NUMBER -10"),
             Ok((
-                EMPTY,
+                "",
                 ("NEGATIVE_NUMBER".to_string(), PropertyValue::Int(-10i32))
             ))
         );
@@ -129,10 +129,7 @@ mod tests {
         let input = r#"STARTPROPERTIES 0
 ENDPROPERTIES"#;
 
-        assert_eq!(
-            properties(&input.as_bytes()),
-            Ok((EMPTY, Properties::new()))
-        );
+        assert_eq!(properties(input), Ok(("", Properties::new())));
     }
 
     #[test]
@@ -147,6 +144,6 @@ ENDPROPERTIES"#;
             "INTEGER".into() => PropertyValue::Int(10),
         ];
 
-        assert_eq!(properties(&input.as_bytes()), Ok((EMPTY, expected)));
+        assert_eq!(properties(input), Ok(("", expected)));
     }
 }
