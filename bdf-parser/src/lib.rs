@@ -1,5 +1,3 @@
-extern crate nom;
-
 use nom::{
     bytes::complete::tag, character::complete::multispace0, combinator::opt, multi::many0, IResult,
 };
@@ -60,12 +58,9 @@ fn bdf(input: &[u8]) -> IResult<&[u8], BDFFont> {
 }
 
 #[cfg(test)]
-#[macro_use]
-extern crate maplit;
-
-#[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashmap;
 
     const EMPTY: &[u8] = &[];
 

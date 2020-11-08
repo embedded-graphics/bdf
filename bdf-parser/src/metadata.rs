@@ -1,10 +1,11 @@
-use super::{helpers::*, BoundingBox};
 use nom::{
     character::complete::{multispace0, space1},
     combinator::map_opt,
     sequence::{preceded, separated_pair},
     IResult, ParseTo,
 };
+
+use crate::{helpers::*, BoundingBox};
 
 pub type FontSize = (i32, (u32, u32));
 

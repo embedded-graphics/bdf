@@ -9,7 +9,7 @@ use nom::{
 };
 use std::collections::HashMap;
 
-use super::helpers::*;
+use crate::helpers::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue {
@@ -68,6 +68,7 @@ pub fn properties(input: &[u8]) -> IResult<&[u8], Properties> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashmap;
 
     const EMPTY: &[u8] = &[];
 

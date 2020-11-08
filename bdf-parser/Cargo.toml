@@ -2,6 +2,7 @@
 name = "bdf-parser"
 description = "Parse BDF files"
 version = "0.1.0"
+edition = "2018"
 authors = ["James Waples <jamwaffles@gmail.com>"]
 repository = "https://github.com/jamwaffles/embedded-fonts"
 documentation = "https://jamwaffles.github.io/embedded-fonts"

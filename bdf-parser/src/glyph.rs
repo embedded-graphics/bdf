@@ -6,7 +6,7 @@ use nom::{
     IResult, ParseTo,
 };
 
-use super::{helpers::*, BoundingBox};
+use crate::{helpers::*, BoundingBox};
 
 type Vec2 = (u32, u32);
 
