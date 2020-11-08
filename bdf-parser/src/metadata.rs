@@ -35,10 +35,7 @@ fn metadata_size(input: &[u8]) -> IResult<&[u8], FontSize> {
 }
 
 fn metadata_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
-    statement(
-        "FONTBOUNDINGBOX",
-        separated_pair(unsigned_xy, space1, signed_xy),
-    )(input)
+    statement("FONTBOUNDINGBOX", BoundingBox::parse)(input)
 }
 
 pub fn header(input: &[u8]) -> IResult<&[u8], Metadata> {
@@ -89,7 +86,10 @@ FONTBOUNDINGBOX 16 24 0 0"#;
                     version: 2.1,
                     name: String::from("\"test font\""),
                     size: (16, (75, 75)),
-                    bounding_box: ((16, 24), (0, 0))
+                    bounding_box: BoundingBox {
+                        size: (16, 24),
+                        offset: (0, 0),
+                    }
                 }
             ))
         );

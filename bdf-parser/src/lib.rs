@@ -1,5 +1,6 @@
 use nom::{
-    bytes::complete::tag, character::complete::multispace0, combinator::opt, multi::many0, IResult,
+    bytes::complete::tag, character::complete::multispace0, character::complete::space1,
+    combinator::map, combinator::opt, multi::many0, sequence::separated_pair, IResult,
 };
 
 mod glyph;
@@ -11,8 +12,6 @@ use glyph::*;
 use helpers::*;
 use metadata::*;
 use properties::*;
-
-pub type BoundingBox = ((u32, u32), (i32, i32));
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BDFFont {
@@ -55,6 +54,21 @@ fn bdf(input: &[u8]) -> IResult<&[u8], BDFFont> {
             glyphs,
         },
     ))
+}
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct BoundingBox {
+    pub size: (u32, u32),
+    pub offset: (i32, i32),
+}
+
+impl BoundingBox {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        map(
+            separated_pair(unsigned_xy, space1, signed_xy),
+            |(size, offset)| Self { size, offset },
+        )(input)
+    }
 }
 
 #[cfg(test)]
@@ -105,18 +119,27 @@ ENDFONT
                         version: 2.1,
                         name: String::from("\"test font\""),
                         size: (16, (75, 75)),
-                        bounding_box: ((16, 24), (0, 0)),
+                        bounding_box: BoundingBox {
+                            size: (16, 24),
+                            offset: (0, 0),
+                        }
                     }),
                     glyphs: vec![
                         Glyph {
                             bitmap: vec![0x1f01],
-                            bounding_box: ((8, 8), (0, 0)),
+                            bounding_box: BoundingBox {
+                                size: (8, 8),
+                                offset: (0, 0),
+                            },
                             charcode: 64,
                             name: "000".to_string(),
                         },
                         Glyph {
                             bitmap: vec![0x2f02],
-                            bounding_box: ((8, 8), (0, 0)),
+                            bounding_box: BoundingBox {
+                                size: (8, 8),
+                                offset: (0, 0),
+                            },
                             charcode: 64,
                             name: "000".to_string(),
                         },
@@ -171,18 +194,27 @@ ENDCHAR
                         version: 2.1,
                         name: String::from("\"open_iconic_all_1x\""),
                         size: (16, (75, 75)),
-                        bounding_box: ((16, 16), (0, 0)),
+                        bounding_box: BoundingBox {
+                            size: (16, 16),
+                            offset: (0, 0),
+                        }
                     }),
                     glyphs: vec![
                         Glyph {
                             bitmap: vec![0x1f01],
-                            bounding_box: ((8, 8), (0, 0)),
+                            bounding_box: BoundingBox {
+                                size: (8, 8),
+                                offset: (0, 0)
+                            },
                             charcode: 64,
                             name: "000".to_string(),
                         },
                         Glyph {
                             bitmap: vec![0x2f02],
-                            bounding_box: ((8, 8), (0, 0)),
+                            bounding_box: BoundingBox {
+                                size: (8, 8),
+                                offset: (0, 0)
+                            },
                             charcode: 64,
                             name: "000".to_string(),
                         },
@@ -211,11 +243,17 @@ ENDCHAR
                         version: 2.1,
                         name: String::from("\"windows_test\""),
                         size: (10, (96, 96)),
-                        bounding_box: ((8, 16), (0, -4)),
+                        bounding_box: BoundingBox {
+                            size: (8, 16),
+                            offset: (0, -4)
+                        },
                     }),
                     glyphs: vec![Glyph {
                         bitmap: vec![0xd5],
-                        bounding_box: ((8, 16), (0, -4)),
+                        bounding_box: BoundingBox {
+                            size: (8, 16),
+                            offset: (0, -4)
+                        },
                         charcode: 0,
                         name: "0".to_string(),
                     },],

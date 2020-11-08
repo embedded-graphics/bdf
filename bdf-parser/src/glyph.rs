@@ -1,8 +1,8 @@
 use nom::{
     bytes::complete::{tag, take_until},
-    character::{complete::multispace0, is_hex_digit, streaming::space1},
+    character::{complete::multispace0, is_hex_digit},
     combinator::{map_opt, opt},
-    sequence::{delimited, separated_pair},
+    sequence::delimited,
     IResult, ParseTo,
 };
 
@@ -38,7 +38,7 @@ fn glyph_swidth(input: &[u8]) -> IResult<&[u8], Vec2> {
 }
 
 fn glyph_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
-    statement("BBX", separated_pair(unsigned_xy, space1, signed_xy))(input)
+    statement("BBX", BoundingBox::parse)(input)
 }
 
 fn glyph_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u32>> {
@@ -164,7 +164,10 @@ ENDCHAR"#;
                     name: "ZZZZ".to_string(),
                     charcode: 65,
                     bitmap: vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000],
-                    bounding_box: ((8, 16), (0, -2)),
+                    bounding_box: BoundingBox {
+                        size: (8, 16),
+                        offset: (0, -2),
+                    },
                 }
             ))
         );
@@ -188,7 +191,10 @@ ENDCHAR"#;
                 EMPTY,
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: ((0, 0), (0, 0)),
+                    bounding_box: BoundingBox {
+                        size: (0, 0),
+                        offset: (0, 0),
+                    },
                     charcode: -1i32,
                     name: "000".to_string(),
                 }
@@ -214,7 +220,10 @@ ENDCHAR"#;
                 EMPTY,
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: ((0, 0), (0, 0)),
+                    bounding_box: BoundingBox {
+                        size: (0, 0),
+                        offset: (0, 0),
+                    },
                     charcode: 0,
                     name: "000".to_string(),
                 }
