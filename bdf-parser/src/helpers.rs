@@ -46,10 +46,10 @@ pub fn take_until_line_ending(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 pub fn statement<'a, O, F>(
     keyword: &'a str,
-    parameters: F,
-) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], O>
+    mut parameters: F,
+) -> impl FnMut(&'a [u8]) -> IResult<&'a [u8], O>
 where
-    F: Fn(&'a [u8]) -> IResult<&'a [u8], O>,
+    F: FnMut(&'a [u8]) -> IResult<&'a [u8], O>,
 {
     move |input: &[u8]| {
         let (input, _) = multispace0(input)?;
