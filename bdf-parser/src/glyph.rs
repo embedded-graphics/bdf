@@ -1,130 +1,105 @@
 use nom::{
-    bytes::complete::{tag, take_until},
-    character::{complete::multispace0, is_hex_digit, streaming::space1},
-    combinator::{map_opt, opt},
-    sequence::{delimited, separated_pair},
-    IResult, ParseTo,
+    bytes::complete::{tag, take, take_until},
+    character::complete::multispace0,
+    combinator::{map, map_parser, map_res, opt},
+    multi::many0,
+    sequence::{delimited, preceded, terminated},
+    IResult,
 };
+use std::convert::TryFrom;
 
-use super::{helpers::*, BoundingBox};
-
-type Vec2 = (u32, u32);
+use crate::{helpers::*, BoundingBox};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
     pub name: String,
-    pub charcode: i32,
+    pub encoding: Option<char>,
+    pub scalable_width: Option<(u32, u32)>,
+    pub device_width: Option<(u32, u32)>,
     pub bounding_box: BoundingBox,
-    pub bitmap: Vec<u32>,
+    pub bitmap: Vec<u8>,
 }
 
-fn glyph_startchar(input: &[u8]) -> IResult<&[u8], String> {
-    statement(
-        "STARTCHAR",
-        map_opt(take_until_line_ending, |name| name.parse_to()),
+impl Glyph {
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        let (input, name) = statement("STARTCHAR", parse_string)(input)?;
+        let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
+        let (input, scalable_width) = opt(statement("SWIDTH", unsigned_xy))(input)?;
+        let (input, device_width) = opt(statement("DWIDTH", unsigned_xy))(input)?;
+        let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
+        let (input, _) = multispace0(input)?;
+        let (input, bitmap) = parse_bitmap(input)?;
+
+        Ok((
+            input,
+            Self {
+                name,
+                encoding,
+                scalable_width,
+                device_width,
+                bounding_box,
+                bitmap,
+            },
+        ))
+    }
+}
+
+fn parse_string(input: &str) -> IResult<&str, String> {
+    map(take_until_line_ending, String::from)(input)
+}
+
+fn parse_encoding(input: &str) -> IResult<&str, Option<char>> {
+    map(parse_to_i32, |code| {
+        u32::try_from(code).ok().and_then(std::char::from_u32)
+    })(input)
+}
+
+fn parse_bitmap(input: &str) -> IResult<&str, Vec<u8>> {
+    map_parser(
+        delimited(tag("BITMAP"), take_until("ENDCHAR"), tag("ENDCHAR")),
+        preceded(multispace0, many0(terminated(parse_hex_byte, multispace0))),
     )(input)
 }
 
-fn glyph_charcode(input: &[u8]) -> IResult<&[u8], i32> {
-    statement("ENCODING", parse_to_i32)(input)
-}
-
-fn glyph_dwidth(input: &[u8]) -> IResult<&[u8], Vec2> {
-    statement("DWIDTH", unsigned_xy)(input)
-}
-
-fn glyph_swidth(input: &[u8]) -> IResult<&[u8], Vec2> {
-    statement("SWIDTH", unsigned_xy)(input)
-}
-
-fn glyph_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
-    statement("BBX", separated_pair(unsigned_xy, space1, signed_xy))(input)
-}
-
-fn glyph_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u32>> {
-    let (input, _) = multispace0(input)?;
-    let (input, glyph_data) =
-        delimited(tag("BITMAP"), take_until("ENDCHAR"), tag("ENDCHAR"))(input)?;
-
-    Ok((
-        input,
-        glyph_data
-            .to_vec()
-            .iter()
-            .filter(|d| is_hex_digit(**d))
-            .collect::<Vec<&u8>>()
-            .chunks(8)
-            .map(|c| {
-                c.iter()
-                    .rev()
-                    .enumerate()
-                    .map(|(k, &&v)| {
-                        let digit = v as char;
-                        digit.to_digit(16).unwrap_or(0) << (k * 4)
-                    })
-                    .sum()
-            })
-            .collect(),
-    ))
-}
-
-pub fn glyph(input: &[u8]) -> IResult<&[u8], Glyph> {
-    let (input, name) = glyph_startchar(input)?;
-    let (input, charcode) = glyph_charcode(input)?;
-    let (input, _) = opt(glyph_swidth)(input)?;
-    let (input, _) = opt(glyph_dwidth)(input)?;
-    let (input, bounding_box) = glyph_bounding_box(input)?;
-    let (input, bitmap) = glyph_bitmap(input)?;
-
-    Ok((
-        input,
-        Glyph {
-            bitmap,
-            bounding_box,
-            charcode,
-            name,
-        },
-    ))
+fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
+    map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const EMPTY: &[u8] = &[];
-
     #[test]
     fn it_parses_bitmap_data() {
+        assert_eq!(parse_bitmap("BITMAP\n7e\nENDCHAR"), Ok(("", vec![0x7e])));
+        assert_eq!(parse_bitmap("BITMAP\nff\nENDCHAR"), Ok(("", vec![255])));
         assert_eq!(
-            glyph_bitmap(b"BITMAP\n7e\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![0x7e]))
+            parse_bitmap("BITMAP\nCCCC\nENDCHAR"),
+            Ok(("", vec![0xcc, 0xcc]))
         );
         assert_eq!(
-            glyph_bitmap(b"BITMAP\nff\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![255]))
+            parse_bitmap("BITMAP\nffffffff\nENDCHAR"),
+            Ok(("", vec![0xff, 0xff, 0xff, 0xff]))
         );
         assert_eq!(
-            glyph_bitmap(b"BITMAP\nCCCC\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![0xcccc]))
+            parse_bitmap("BITMAP\nffffffff\naaaaaaaa\nENDCHAR"),
+            Ok(("", vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa]))
         );
         assert_eq!(
-            glyph_bitmap(b"BITMAP\nffffffff\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![0xffffffff]))
+            parse_bitmap("BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR"),
+            Ok(("", vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa]))
         );
         assert_eq!(
-            glyph_bitmap(b"BITMAP\nffffffff\naaaaaaaa\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![0xffffffff, 0xaaaaaaaa]))
-        );
-        assert_eq!(
-            glyph_bitmap(b"BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR".as_ref()),
-            Ok((EMPTY, vec![0xffffffff, 0xaaaaaaaa]))
-        );
-        assert_eq!(
-            glyph_bitmap(
-                b"BITMAP\n00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00\nENDCHAR"
-                    .as_ref()
+            parse_bitmap(
+                "BITMAP\n00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00\nENDCHAR"
             ),
-            Ok((EMPTY, vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000]))
+            Ok((
+                "",
+                vec![
+                    0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42,
+                    0x42, 0x00, 0x00
+                ]
+            ))
         );
     }
 
@@ -154,17 +129,25 @@ BITMAP
 00
 ENDCHAR"#;
 
-        let out = glyph(chardata.as_bytes());
+        let out = Glyph::parse(chardata);
 
         assert_eq!(
             out,
             Ok((
-                EMPTY,
+                "",
                 Glyph {
                     name: "ZZZZ".to_string(),
-                    charcode: 65,
-                    bitmap: vec![0x00000000, 0x18242442, 0x427e4242, 0x42420000],
-                    bounding_box: ((8, 16), (0, -2)),
+                    encoding: Some('A'),
+                    bitmap: vec![
+                        0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42,
+                        0x42, 0x42, 0x00, 0x00
+                    ],
+                    bounding_box: BoundingBox {
+                        size: (8, 16),
+                        offset: (0, -2),
+                    },
+                    scalable_width: Some((500, 0)),
+                    device_width: Some((8, 0)),
                 }
             ))
         );
@@ -180,17 +163,22 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = glyph(chardata.as_bytes());
+        let out = Glyph::parse(chardata);
 
         assert_eq!(
             out,
             Ok((
-                EMPTY,
+                "",
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: ((0, 0), (0, 0)),
-                    charcode: -1i32,
+                    bounding_box: BoundingBox {
+                        size: (0, 0),
+                        offset: (0, 0),
+                    },
+                    encoding: None,
                     name: "000".to_string(),
+                    scalable_width: Some((432, 0)),
+                    device_width: Some((6, 0)),
                 }
             ))
         );
@@ -206,17 +194,22 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = glyph(chardata.as_bytes());
+        let out = Glyph::parse(chardata);
 
         assert_eq!(
             out,
             Ok((
-                EMPTY,
+                "",
                 Glyph {
                     bitmap: vec![],
-                    bounding_box: ((0, 0), (0, 0)),
-                    charcode: 0,
+                    bounding_box: BoundingBox {
+                        size: (0, 0),
+                        offset: (0, 0),
+                    },
+                    encoding: Some('\x00'),
                     name: "000".to_string(),
+                    scalable_width: Some((432, 0)),
+                    device_width: Some((6, 0)),
                 }
             ))
         );
