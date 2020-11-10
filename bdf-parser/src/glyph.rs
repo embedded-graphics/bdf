@@ -1,5 +1,5 @@
 use nom::{
-    bytes::complete::{tag, take_until, take_while_m_n},
+    bytes::complete::{tag, take, take_until},
     character::complete::multispace0,
     combinator::{map, map_parser, map_res, opt},
     multi::many0,
@@ -62,9 +62,7 @@ fn parse_bitmap(input: &str) -> IResult<&str, Vec<u8>> {
 }
 
 fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
-    map_res(take_while_m_n(2, 2, |c: char| c.is_ascii_hexdigit()), |v| {
-        u8::from_str_radix(v, 16)
-    })(input)
+    map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
 }
 
 #[cfg(test)]
