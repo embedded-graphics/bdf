@@ -1,0 +1,13 @@
+[package]
+name = "embedded-bdf"
+version = "0.1.0"
+authors = ["Ralf Fuest <mail@rfuest.de>"]
+edition = "2018"
+
+[dependencies]
+embedded-graphics = "0.7.0-alpha.2" 
+embedded-bdf-macros = { path = "../embedded-bdf-macros" }
+
+[dev-dependencies]
+# TODO: change to non git dependency
+embedded-graphics-simulator = { git = "https://github.com/rfuest/simulator", branch = "update-eg-dep"}

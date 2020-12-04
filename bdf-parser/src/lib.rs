@@ -1,38 +1,32 @@
-use std::str::FromStr;
-
 use nom::{
-    bytes::complete::tag,
-    character::complete::multispace0,
-    character::complete::space1,
-    combinator::map,
-    combinator::{eof, opt},
-    multi::many0,
-    sequence::{separated_pair, terminated},
-    IResult,
+    bytes::complete::tag, character::complete::multispace0, character::complete::space1,
+    combinator::map, combinator::opt, multi::many0, sequence::separated_pair, IResult,
 };
+use std::str::FromStr;
 
 mod glyph;
 mod helpers;
 mod metadata;
 mod properties;
 
-use glyph::*;
+pub use glyph::Glyph;
 use helpers::*;
-use metadata::*;
-use properties::*;
+pub use metadata::Metadata;
+use properties::parse_properties;
+pub use properties::{Properties, PropertyValue};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BdfFont {
-    metadata: Option<Metadata>,
-    glyphs: Vec<Glyph>,
-    properties: Option<Properties>,
+    pub metadata: Option<Metadata>,
+    pub glyphs: Vec<Glyph>,
+    pub properties: Option<Properties>,
 }
 
 impl BdfFont {
     fn parse(input: &str) -> IResult<&str, Self> {
         let (input, metadata) = opt(Metadata::parse)(input)?;
         let (input, _) = multispace0(input)?;
-        let (input, properties) = opt(properties)(input)?;
+        let (input, properties) = opt(parse_properties)(input)?;
         let (input, _) = multispace0(input)?;
         let (input, _) = opt(numchars)(input)?;
         let (input, _) = multispace0(input)?;
@@ -56,8 +50,13 @@ impl FromStr for BdfFont {
     // TODO: use better error type
     type Err = ();
 
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let (_, font) = terminated(Self::parse, eof)(input).map_err(|_| ())?;
+    fn from_str(source: &str) -> Result<Self, Self::Err> {
+        let (remaining_input, font) = BdfFont::parse(source).map_err(|_| ())?;
+
+        //TODO: can this happen?
+        if !remaining_input.is_empty() {
+            return Err(());
+        }
 
         Ok(font)
     }
@@ -126,7 +125,7 @@ ENDFONT
                     bounding_box: BoundingBox {
                         size: (16, 24),
                         offset: (0, 0),
-                    }
+                    },
                 }),
                 glyphs: vec![
                     Glyph {
@@ -135,7 +134,7 @@ ENDFONT
                             size: (8, 8),
                             offset: (0, 0),
                         },
-                        encoding: Some('@'),
+                        encoding: Some('@'), //64
                         name: "000".to_string(),
                         device_width: Some((8, 0)),
                         scalable_width: None,
@@ -146,7 +145,7 @@ ENDFONT
                             size: (8, 8),
                             offset: (0, 0),
                         },
-                        encoding: Some('@'),
+                        encoding: Some('@'), //64
                         name: "000".to_string(),
                         device_width: Some((8, 0)),
                         scalable_width: None,
@@ -203,16 +202,16 @@ ENDCHAR
                     bounding_box: BoundingBox {
                         size: (16, 16),
                         offset: (0, 0),
-                    }
+                    },
                 }),
                 glyphs: vec![
                     Glyph {
                         bitmap: vec![0x1f, 0x01],
                         bounding_box: BoundingBox {
                             size: (8, 8),
-                            offset: (0, 0)
+                            offset: (0, 0),
                         },
-                        encoding: Some('@'),
+                        encoding: Some('@'), //64
                         name: "000".to_string(),
                         device_width: Some((8, 0)),
                         scalable_width: None,
@@ -221,9 +220,9 @@ ENDCHAR
                         bitmap: vec![0x2f, 0x02],
                         bounding_box: BoundingBox {
                             size: (8, 8),
-                            offset: (0, 0)
+                            offset: (0, 0),
                         },
-                        encoding: Some('@'),
+                        encoding: Some('@'), //64
                         name: "000".to_string(),
                         device_width: Some((8, 0)),
                         scalable_width: None,
@@ -254,14 +253,14 @@ ENDCHAR
                     resolution: (96, 96),
                     bounding_box: BoundingBox {
                         size: (8, 16),
-                        offset: (0, -4)
+                        offset: (0, -4),
                     },
                 }),
                 glyphs: vec![Glyph {
                     bitmap: vec![0xd5],
                     bounding_box: BoundingBox {
                         size: (8, 16),
-                        offset: (0, -4)
+                        offset: (0, -4),
                     },
                     encoding: Some('\x00'),
                     name: "0".to_string(),

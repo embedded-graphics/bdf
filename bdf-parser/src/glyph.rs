@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn it_parses_bitmap_data() {
         assert_eq!(parse_bitmap("BITMAP\n7e\nENDCHAR"), Ok(("", vec![0x7e])));
-        assert_eq!(parse_bitmap("BITMAP\nff\nENDCHAR"), Ok(("", vec![255])));
+        assert_eq!(parse_bitmap("BITMAP\nff\nENDCHAR"), Ok(("", vec![0xff])));
         assert_eq!(
             parse_bitmap("BITMAP\nCCCC\nENDCHAR"),
             Ok(("", vec![0xcc, 0xcc]))
@@ -129,22 +129,20 @@ BITMAP
 00
 ENDCHAR"#;
 
-        let out = Glyph::parse(chardata);
-
         assert_eq!(
-            out,
+            Glyph::parse(chardata),
             Ok((
                 "",
                 Glyph {
                     name: "ZZZZ".to_string(),
-                    encoding: Some('A'),
+                    encoding: Some('A'), //65
                     bitmap: vec![
                         0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42,
                         0x42, 0x42, 0x00, 0x00
                     ],
                     bounding_box: BoundingBox {
                         size: (8, 16),
-                        offset: (0, -2),
+                        offset: (0, -2)
                     },
                     scalable_width: Some((500, 0)),
                     device_width: Some((8, 0)),
@@ -163,17 +161,15 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = Glyph::parse(chardata);
-
         assert_eq!(
-            out,
+            Glyph::parse(chardata),
             Ok((
                 "",
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
                         size: (0, 0),
-                        offset: (0, 0),
+                        offset: (0, 0)
                     },
                     encoding: None,
                     name: "000".to_string(),
@@ -194,17 +190,15 @@ BBX 0 0 0 0
 BITMAP
 ENDCHAR"#;
 
-        let out = Glyph::parse(chardata);
-
         assert_eq!(
-            out,
+            Glyph::parse(chardata),
             Ok((
                 "",
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
                         size: (0, 0),
-                        offset: (0, 0),
+                        offset: (0, 0)
                     },
                     encoding: Some('\x00'),
                     name: "000".to_string(),

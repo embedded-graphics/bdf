@@ -35,7 +35,7 @@ ENDFONT
 "#;
 
         b.iter(|| {
-            let parser = BDFParser::from_str(&chardata);
+            let parser = BdfParser::from_str(&chardata);
 
             let _out = parser.parse();
 
