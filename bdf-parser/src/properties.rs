@@ -53,7 +53,7 @@ fn num_properties(input: &str) -> IResult<&str, u32> {
     statement("STARTPROPERTIES", map_opt(digit1, |n: &str| n.parse_to()))(input)
 }
 
-pub fn properties(input: &str) -> IResult<&str, Properties> {
+pub fn parse_properties(input: &str) -> IResult<&str, Properties> {
     map(
         map_parser(
             delimited(
@@ -129,7 +129,7 @@ mod tests {
         let input = r#"STARTPROPERTIES 0
 ENDPROPERTIES"#;
 
-        assert_eq!(properties(input), Ok(("", Properties::new())));
+        assert_eq!(parse_properties(input), Ok(("", Properties::new())));
     }
 
     #[test]
@@ -144,6 +144,6 @@ ENDPROPERTIES"#;
             "INTEGER".into() => PropertyValue::Int(10),
         ];
 
-        assert_eq!(properties(input), Ok(("", expected)));
+        assert_eq!(parse_properties(input), Ok(("", expected)));
     }
 }
