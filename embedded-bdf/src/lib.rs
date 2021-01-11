@@ -11,29 +11,6 @@ pub struct BdfFont<'a, 'b> {
 }
 
 impl BdfFont<'_, '_> {
-    pub(crate) fn draw<D>(
-        &self,
-        text: &str,
-        mut position: Point,
-        color: D::Color,
-        target: &mut D,
-    ) -> Result<(), D::Error>
-    where
-        D: DrawTarget,
-    {
-        for c in text.chars() {
-            if let Some(glyph) = self.get_glyph(c) {
-                glyph.draw(position, color, target)?;
-
-                position.x += glyph.device_width as i32;
-            } else {
-                //TODO: how should missing glyphs be handled?
-            }
-        }
-
-        Ok(())
-    }
-
     fn get_glyph(&self, c: char) -> Option<&BdfGlyph> {
         self.glyphs.iter().find(|g| g.character == c)
     }

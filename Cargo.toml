@@ -5,3 +5,6 @@ members = [
     "embedded-bdf",
     "embedded-bdf-macros",
 ]
+
+[patch.crates-io]
+embedded-graphics = { git = "https://github.com/rfuest/embedded-graphics", branch = "core-text-style" }
