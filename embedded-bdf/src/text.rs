@@ -1,7 +1,7 @@
 use embedded_graphics::{
     prelude::*,
     primitives::Rectangle,
-    text::{TextRenderer, VerticalAlignment},
+    text::{TextMetrics, TextRenderer, VerticalAlignment},
 };
 
 use crate::BdfFont;
@@ -60,16 +60,19 @@ where
         Ok(position + Size::new(width, 0))
     }
 
-    fn string_width(&self, text: &str) -> u32 {
+    fn measure_string(&self, text: &str, position: Point) -> TextMetrics {
         // TODO: handle missing glyphs the same way as `draw_string` does
-        text.chars()
+        let dx = text
+            .chars()
             .filter_map(|c| self.font.get_glyph(c))
             .map(|glyph| glyph.device_width)
-            .sum()
-    }
+            .sum();
 
-    fn string_bounding_box(&self, _text: &str, _position: Point) -> (Rectangle, Point) {
-        todo!()
+        // TODO: calculate bounding box
+        TextMetrics {
+            bounding_box: Rectangle::new(position, Size::zero()),
+            next_position: position + Size::new(dx, 0),
+        }
     }
 
     fn vertical_offset(&self, position: Point, _vertical_alignment: VerticalAlignment) -> Point {
