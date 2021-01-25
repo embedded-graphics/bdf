@@ -5,7 +5,8 @@ authors = ["Ralf Fuest <mail@rfuest.de>"]
 edition = "2018"
 
 [dependencies]
-embedded-graphics = { git = "https://github.com/rfuest/embedded-graphics", branch = "core-text-style" }
+# TODO: change to non git dependency
+embedded-graphics = { git = "https://github.com/embedded-graphics/embedded-graphics" }
 embedded-bdf-macros = { path = "../embedded-bdf-macros" }
 
 [dev-dependencies]
