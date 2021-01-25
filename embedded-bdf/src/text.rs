@@ -1,4 +1,8 @@
-use embedded_graphics::{fonts::Text, prelude::*};
+use embedded_graphics::{
+    prelude::*,
+    primitives::Rectangle,
+    text::{TextMetrics, TextRenderer, VerticalAlignment},
+};
 
 use crate::BdfFont;
 
@@ -16,29 +20,68 @@ where
     }
 }
 
-pub struct BdfStyled<'a, 'b, 'c, 'd, C> {
-    text: Text<'a>,
-    style: BdfTextStyle<'b, 'c, 'd, C>,
-}
-
-impl<'a, 'b, 'c, 'd, C> BdfStyled<'a, 'b, 'c, 'd, C> {
-    pub fn new(text: Text<'a>, style: BdfTextStyle<'b, 'c, 'd, C>) -> Self {
-        Self { text, style }
-    }
-}
-
-impl<C> Drawable for BdfStyled<'_, '_, '_, '_, C>
+impl<'a, 'b, 'c, C> TextRenderer for BdfTextStyle<'a, 'b, 'c, C>
 where
     C: PixelColor,
 {
     type Color = C;
 
-    fn draw<D>(&self, target: &mut D) -> Result<(), D::Error>
+    fn draw_string<D>(
+        &self,
+        text: &str,
+        mut position: Point,
+        target: &mut D,
+    ) -> Result<Point, D::Error>
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        self.style
-            .font
-            .draw(self.text.text, self.text.position, self.style.color, target)
+        for c in text.chars() {
+            if let Some(glyph) = self.font.get_glyph(c) {
+                glyph.draw(position, self.color, target)?;
+
+                position.x += glyph.device_width as i32;
+            } else {
+                //TODO: how should missing glyphs be handled?
+            }
+        }
+
+        Ok(position)
+    }
+
+    fn draw_whitespace<D>(
+        &self,
+        width: u32,
+        position: Point,
+        _target: &mut D,
+    ) -> Result<Point, D::Error>
+    where
+        D: DrawTarget<Color = Self::Color>,
+    {
+        Ok(position + Size::new(width, 0))
+    }
+
+    fn measure_string(&self, text: &str, position: Point) -> TextMetrics {
+        // TODO: handle missing glyphs the same way as `draw_string` does
+        let dx = text
+            .chars()
+            .filter_map(|c| self.font.get_glyph(c))
+            .map(|glyph| glyph.device_width)
+            .sum();
+
+        // TODO: calculate bounding box
+        TextMetrics {
+            bounding_box: Rectangle::new(position, Size::zero()),
+            next_position: position + Size::new(dx, 0),
+        }
+    }
+
+    fn vertical_offset(&self, position: Point, _vertical_alignment: VerticalAlignment) -> Point {
+        // TODO: support other alignments
+        position
+    }
+
+    fn line_height(&self) -> u32 {
+        // TODO: read line height from BDF file
+        11
     }
 }

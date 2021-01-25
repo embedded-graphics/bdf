@@ -5,9 +5,10 @@ authors = ["Ralf Fuest <mail@rfuest.de>"]
 edition = "2018"
 
 [dependencies]
-embedded-graphics = "0.7.0-alpha.2" 
+# TODO: change to non git dependency
+embedded-graphics = { git = "https://github.com/embedded-graphics/embedded-graphics" }
 embedded-bdf-macros = { path = "../embedded-bdf-macros" }
 
 [dev-dependencies]
 # TODO: change to non git dependency
-embedded-graphics-simulator = { git = "https://github.com/rfuest/simulator", branch = "update-eg-dep"}
+embedded-graphics-simulator = { git = "https://github.com/embedded-graphics/simulator" }
