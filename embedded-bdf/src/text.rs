@@ -6,6 +6,7 @@ use embedded_graphics::{
 
 use crate::BdfFont;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfTextStyle<'a, 'b, 'c, C> {
     font: &'a BdfFont<'b, 'c>,
     color: C,
