@@ -7,5 +7,4 @@ edition = "2018"
 [dev-dependencies]
 chardet = "0.2.4"
 encoding = "0.2.33"
-maplit = "1.0.2"
 bdf-parser = { path = "../../bdf-parser" }
