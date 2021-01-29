@@ -1,8 +1,3 @@
-extern crate bdf_parser;
-extern crate chardet;
-extern crate encoding;
-extern crate nom;
-
 use chardet::{charset2encoding, detect};
 use encoding::{label::encoding_from_whatwg_label, DecoderTrap};
 use std::{
