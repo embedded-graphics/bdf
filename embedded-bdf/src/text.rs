@@ -1,7 +1,7 @@
 use embedded_graphics::{
     prelude::*,
     primitives::Rectangle,
-    text::{TextMetrics, TextRenderer, VerticalAlignment},
+    text::{CharacterStyle, TextMetrics, TextRenderer, VerticalAlignment},
 };
 
 use crate::BdfFont;
@@ -19,6 +19,22 @@ where
     pub fn new(font: &'a BdfFont<'b, 'c>, color: C) -> Self {
         Self { font, color }
     }
+}
+
+impl<'a, 'b, 'c, C> CharacterStyle for BdfTextStyle<'a, 'b, 'c, C>
+where
+    C: PixelColor,
+{
+    type Color = C;
+
+    fn set_text_color(&mut self, text_color: Option<Self::Color>) {
+        // TODO: support transparent text
+        if let Some(color) = text_color {
+            self.color = color;
+        }
+    }
+
+    // TODO: implement additional methods
 }
 
 impl<'a, 'b, 'c, C> TextRenderer for BdfTextStyle<'a, 'b, 'c, C>

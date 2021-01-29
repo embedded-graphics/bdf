@@ -2,7 +2,7 @@ use embedded_bdf::{include_bdf, text::BdfTextStyle, BdfFont};
 use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
-    text::{Text, TextStyleBuilder},
+    text::{HorizontalAlignment, Text, TextStyleBuilder},
 };
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, Window};
 
@@ -21,14 +21,14 @@ fn main() {
     let text = Text::new("Hello BDF! äöü,\"#", Point::new(150, 100));
     let style = TextStyleBuilder::new()
         .character_style(style_large)
-        .horizontal_alignment(embedded_graphics::text::HorizontalAlignment::Center)
+        .horizontal_alignment(HorizontalAlignment::Center)
         .build();
     text.into_styled(style).draw(&mut display).unwrap();
 
     let text = Text::new("Line 1\nLine 2\nLast line", Point::new(390, 10));
     let style = TextStyleBuilder::new()
         .character_style(style_small)
-        .horizontal_alignment(embedded_graphics::text::HorizontalAlignment::Right)
+        .horizontal_alignment(HorizontalAlignment::Right)
         .build();
     text.into_styled(style).draw(&mut display).unwrap();
 
