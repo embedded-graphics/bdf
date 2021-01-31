@@ -6,6 +6,7 @@ pub use embedded_bdf_macros::include_bdf;
 
 pub mod text;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfFont<'a, 'b> {
     pub glyphs: &'a [BdfGlyph<'b>],
 }
@@ -16,6 +17,7 @@ impl BdfFont<'_, '_> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfGlyph<'a> {
     pub character: char,
     pub bounding_box: Rectangle,

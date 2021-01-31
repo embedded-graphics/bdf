@@ -1,8 +1,3 @@
-extern crate bdf_parser;
-extern crate chardet;
-extern crate encoding;
-extern crate nom;
-
 mod helpers;
 
 use std::path::Path;
@@ -10,12 +5,12 @@ use std::path::Path;
 use helpers::*;
 
 #[test]
-fn it_parses_all_u8g2_fonts() {
-    let fontdir = Path::new("./tests/u8g2/tools/font/bdf")
+fn it_parses_all_tecate_fonts() {
+    let fontdir = Path::new("../../target/fonts/bitmap-fonts/bitmap")
         .canonicalize()
         .unwrap();
 
-    let fonts = collect_font_files(&fontdir).expect("Could not get list of u8g2 fonts");
+    let fonts = collect_font_files(&fontdir).expect("Could not get list of fonts");
 
     let results = fonts.iter().map(|fpath| test_font_parse(fpath));
 
@@ -27,7 +22,7 @@ fn it_parses_all_u8g2_fonts() {
         }
 
         println!(
-            "{0: <30} {1:?}",
+            "{0: <60} {1:?}",
             font.file_name().unwrap().to_str().unwrap(),
             result
         );
