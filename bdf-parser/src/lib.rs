@@ -173,7 +173,7 @@ ENDFONT
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some(Coord::new(8, 0)),
+                    device_width: Coord::new(8, 0),
                     scalable_width: None,
                 },
                 Glyph {
@@ -184,7 +184,7 @@ ENDFONT
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some(Coord::new(8, 0)),
+                    device_width: Coord::new(8, 0),
                     scalable_width: None,
                 },
             ],
@@ -254,7 +254,7 @@ ENDCHAR
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some(Coord::new(8, 0)),
+                    device_width: Coord::new(8, 0),
                     scalable_width: None,
                 },
                 Glyph {
@@ -265,7 +265,7 @@ ENDCHAR
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some(Coord::new(8, 0)),
+                    device_width: Coord::new(8, 0),
                     scalable_width: None,
                 }
             ]
@@ -309,7 +309,7 @@ ENDCHAR
                 },
                 encoding: Some('\x00'),
                 name: "0".to_string(),
-                device_width: Some(Coord::new(8, 0)),
+                device_width: Coord::new(8, 0),
                 scalable_width: Some(Coord::new(600, 0)),
             },]
         );

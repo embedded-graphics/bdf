@@ -15,7 +15,7 @@ pub struct Glyph {
     pub name: String,
     pub encoding: Option<char>,
     pub scalable_width: Option<Coord>,
-    pub device_width: Option<Coord>,
+    pub device_width: Coord,
     pub bounding_box: BoundingBox,
     pub bitmap: Vec<u8>,
 }
@@ -25,7 +25,7 @@ impl Glyph {
         let (input, name) = statement("STARTCHAR", parse_string)(input)?;
         let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
         let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
-        let (input, device_width) = opt(statement("DWIDTH", Coord::parse))(input)?;
+        let (input, device_width) = statement("DWIDTH", Coord::parse)(input)?;
         let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
         let (input, _) = multispace0(input)?;
         let (input, bitmap) = parse_bitmap(input)?;
@@ -145,7 +145,7 @@ ENDCHAR"#;
                         offset: Coord::new(0, -2),
                     },
                     scalable_width: Some(Coord::new(500, 0)),
-                    device_width: Some(Coord::new(8, 0)),
+                    device_width: Coord::new(8, 0),
                 }
             ))
         );
@@ -174,7 +174,7 @@ ENDCHAR"#;
                     encoding: None,
                     name: "000".to_string(),
                     scalable_width: Some(Coord::new(432, 0)),
-                    device_width: Some(Coord::new(6, 0)),
+                    device_width: Coord::new(6, 0),
                 }
             ))
         );
@@ -203,7 +203,7 @@ ENDCHAR"#;
                     encoding: Some('\x00'),
                     name: "000".to_string(),
                     scalable_width: Some(Coord::new(432, 0)),
-                    device_width: Some(Coord::new(6, 0)),
+                    device_width: Coord::new(6, 0),
                 }
             ))
         );
