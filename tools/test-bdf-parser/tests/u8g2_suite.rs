@@ -1,6 +1,6 @@
-mod helpers;
+use std::{path::Path, ffi::OsStr};
 
-use std::path::Path;
+mod helpers;
 
 use helpers::*;
 
@@ -12,7 +12,11 @@ fn it_parses_all_u8g2_fonts() {
 
     let fonts = collect_font_files(&fontdir).expect("Could not get list of u8g2 fonts");
 
-    let results = fonts.iter().map(|fpath| test_font_parse(fpath));
+    let results = fonts
+        .iter()
+        // u8x8extra.bdf has a broken header
+        .filter(|path| path.file_name() != Some(OsStr::new("u8x8extra.bdf")))
+        .map(|fpath| test_font_parse(fpath));
 
     let mut num_errors = 0;
 

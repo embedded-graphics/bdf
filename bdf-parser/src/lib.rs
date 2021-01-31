@@ -18,7 +18,7 @@ pub use properties::{Properties, Property, PropertyValue};
 #[derive(Debug, Clone, PartialEq)]
 pub struct BdfFont {
     /// Font metadata.
-    pub metadata: Option<Metadata>,
+    pub metadata: Metadata,
 
     /// Glyphs.
     pub glyphs: Vec<Glyph>,
@@ -29,7 +29,7 @@ pub struct BdfFont {
 
 impl BdfFont {
     fn parse(input: &str) -> IResult<&str, Self> {
-        let (input, metadata) = opt(Metadata::parse)(input)?;
+        let (input, metadata) = Metadata::parse(input)?;
         let (input, _) = multispace0(input)?;
         let (input, properties) = Properties::parse(input)?;
         let (input, _) = multispace0(input)?;
@@ -150,7 +150,7 @@ ENDFONT
 
         assert_eq!(
             font.metadata,
-            Some(Metadata {
+            Metadata {
                 version: 2.1,
                 name: String::from("\"test font\""),
                 point_size: 16,
@@ -159,7 +159,7 @@ ENDFONT
                     size: Coord::new(16, 24),
                     offset: Coord::new(0, 0),
                 },
-            })
+            }
         );
 
         assert_eq!(
@@ -231,7 +231,7 @@ ENDCHAR
 
         assert_eq!(
             font.metadata,
-            Some(Metadata {
+            Metadata {
                 version: 2.1,
                 name: String::from("\"open_iconic_all_1x\""),
                 point_size: 16,
@@ -240,7 +240,7 @@ ENDCHAR
                     size: Coord::new(16, 16),
                     offset: Coord::new(0, 0),
                 },
-            }),
+            },
         );
 
         assert_eq!(
@@ -287,7 +287,7 @@ ENDCHAR
 
         assert_eq!(
             font.metadata,
-            Some(Metadata {
+            Metadata {
                 version: 2.1,
                 name: String::from("\"windows_test\""),
                 point_size: 10,
@@ -296,7 +296,7 @@ ENDCHAR
                     size: Coord::new(8, 16),
                     offset: Coord::new(0, -4),
                 },
-            })
+            }
         );
 
         assert_eq!(
