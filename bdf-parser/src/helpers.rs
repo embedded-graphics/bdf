@@ -3,7 +3,7 @@ use nom::{
     character::complete::{digit1, line_ending, multispace0, one_of, space0, space1},
     combinator::{map_opt, opt, recognize},
     multi::many0,
-    sequence::{delimited, preceded, separated_pair},
+    sequence::{delimited, preceded},
     IResult, ParseTo,
 };
 
@@ -63,14 +63,6 @@ where
 
         Ok((input, p))
     }
-}
-
-pub fn signed_xy(input: &str) -> IResult<&str, (i32, i32)> {
-    separated_pair(parse_to_i32, space1, parse_to_i32)(input)
-}
-
-pub fn unsigned_xy(input: &str) -> IResult<&str, (u32, u32)> {
-    separated_pair(parse_to_u32, space1, parse_to_u32)(input)
 }
 
 #[cfg(test)]

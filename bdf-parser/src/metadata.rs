@@ -5,14 +5,14 @@ use nom::{
     IResult, ParseTo,
 };
 
-use crate::{helpers::*, BoundingBox};
+use crate::{helpers::*, BoundingBox, Coord};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
     pub version: f32,
     pub name: String,
     pub point_size: i32,
-    pub resolution: (u32, u32),
+    pub resolution: Coord,
     pub bounding_box: BoundingBox,
 }
 
@@ -47,8 +47,8 @@ fn metadata_name(input: &str) -> IResult<&str, String> {
     map(statement("FONT", take_until_line_ending), String::from)(input)
 }
 
-fn metadata_size(input: &str) -> IResult<&str, (i32, (u32, u32))> {
-    statement("SIZE", separated_pair(parse_to_i32, space1, unsigned_xy))(input)
+fn metadata_size(input: &str) -> IResult<&str, (i32, Coord)> {
+    statement("SIZE", separated_pair(parse_to_i32, space1, Coord::parse))(input)
 }
 
 fn metadata_bounding_box(input: &str) -> IResult<&str, BoundingBox> {
@@ -71,8 +71,8 @@ mod tests {
     fn it_parses_header() {
         let input = r#"STARTFONT 2.1
 FONT "test font"
-SIZE 16 75 75
-FONTBOUNDINGBOX 16 24 0 0"#;
+SIZE 16 75 100
+FONTBOUNDINGBOX 16 24 1 2"#;
 
         assert_eq!(
             Metadata::parse(input),
@@ -82,10 +82,10 @@ FONTBOUNDINGBOX 16 24 0 0"#;
                     version: 2.1,
                     name: String::from("\"test font\""),
                     point_size: 16,
-                    resolution: (75, 75),
+                    resolution: Coord::new(75, 100),
                     bounding_box: BoundingBox {
-                        size: (16, 24),
-                        offset: (0, 0),
+                        size: Coord::new(16, 24),
+                        offset: Coord::new(1, 2),
                     }
                 }
             ))

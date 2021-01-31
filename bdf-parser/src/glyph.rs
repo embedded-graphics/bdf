@@ -8,14 +8,14 @@ use nom::{
 };
 use std::convert::TryFrom;
 
-use crate::{helpers::*, BoundingBox};
+use crate::{helpers::*, BoundingBox, Coord};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
     pub name: String,
     pub encoding: Option<char>,
-    pub scalable_width: Option<(u32, u32)>,
-    pub device_width: Option<(u32, u32)>,
+    pub scalable_width: Option<Coord>,
+    pub device_width: Option<Coord>,
     pub bounding_box: BoundingBox,
     pub bitmap: Vec<u8>,
 }
@@ -24,8 +24,8 @@ impl Glyph {
     pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
         let (input, name) = statement("STARTCHAR", parse_string)(input)?;
         let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
-        let (input, scalable_width) = opt(statement("SWIDTH", unsigned_xy))(input)?;
-        let (input, device_width) = opt(statement("DWIDTH", unsigned_xy))(input)?;
+        let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
+        let (input, device_width) = opt(statement("DWIDTH", Coord::parse))(input)?;
         let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
         let (input, _) = multispace0(input)?;
         let (input, bitmap) = parse_bitmap(input)?;
@@ -141,11 +141,11 @@ ENDCHAR"#;
                         0x42, 0x42, 0x00, 0x00
                     ],
                     bounding_box: BoundingBox {
-                        size: (8, 16),
-                        offset: (0, -2)
+                        size: Coord::new(8, 16),
+                        offset: Coord::new(0, -2),
                     },
-                    scalable_width: Some((500, 0)),
-                    device_width: Some((8, 0)),
+                    scalable_width: Some(Coord::new(500, 0)),
+                    device_width: Some(Coord::new(8, 0)),
                 }
             ))
         );
@@ -168,13 +168,13 @@ ENDCHAR"#;
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
-                        size: (0, 0),
-                        offset: (0, 0)
+                        size: Coord::new(0, 0),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: None,
                     name: "000".to_string(),
-                    scalable_width: Some((432, 0)),
-                    device_width: Some((6, 0)),
+                    scalable_width: Some(Coord::new(432, 0)),
+                    device_width: Some(Coord::new(6, 0)),
                 }
             ))
         );
@@ -197,13 +197,13 @@ ENDCHAR"#;
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
-                        size: (0, 0),
-                        offset: (0, 0)
+                        size: Coord::new(0, 0),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('\x00'),
                     name: "000".to_string(),
-                    scalable_width: Some((432, 0)),
-                    device_width: Some((6, 0)),
+                    scalable_width: Some(Coord::new(432, 0)),
+                    device_width: Some(Coord::new(6, 0)),
                 }
             ))
         );

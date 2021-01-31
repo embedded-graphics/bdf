@@ -19,8 +19,10 @@ pub use properties::{Properties, Property, PropertyValue};
 pub struct BdfFont {
     /// Font metadata.
     pub metadata: Option<Metadata>,
+
     /// Glyphs.
     pub glyphs: Vec<Glyph>,
+
     /// Properties.
     pub properties: Properties,
 }
@@ -65,16 +67,46 @@ impl FromStr for BdfFont {
     }
 }
 
+/// Bounding box.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct BoundingBox {
-    pub size: (u32, u32),
-    pub offset: (i32, i32),
+    /// Size of the bounding box.
+    pub size: Coord,
+
+    /// Offset to the lower left corner of the bounding box.
+    pub offset: Coord,
+}
+
+/// Coordinate.
+///
+/// BDF files use a cartesian coordinate system, where the positive half-axis points upwards.
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Coord {
+    /// X coordinate.
+    pub x: i32,
+
+    /// Y coordinate.
+    pub y: i32,
+}
+
+impl Coord {
+    /// Creates a new coord.
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        map(
+            separated_pair(parse_to_i32, space1, parse_to_i32),
+            |(x, y)| Self::new(x, y),
+        )(input)
+    }
 }
 
 impl BoundingBox {
     pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
         map(
-            separated_pair(unsigned_xy, space1, signed_xy),
+            separated_pair(Coord::parse, space1, Coord::parse),
             |(size, offset)| Self { size, offset },
         )(input)
     }
@@ -122,10 +154,10 @@ ENDFONT
                 version: 2.1,
                 name: String::from("\"test font\""),
                 point_size: 16,
-                resolution: (75, 75),
+                resolution: Coord::new(75, 75),
                 bounding_box: BoundingBox {
-                    size: (16, 24),
-                    offset: (0, 0),
+                    size: Coord::new(16, 24),
+                    offset: Coord::new(0, 0),
                 },
             })
         );
@@ -136,23 +168,23 @@ ENDFONT
                 Glyph {
                     bitmap: vec![0x1f, 0x01],
                     bounding_box: BoundingBox {
-                        size: (8, 8),
-                        offset: (0, 0),
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some((8, 0)),
+                    device_width: Some(Coord::new(8, 0)),
                     scalable_width: None,
                 },
                 Glyph {
                     bitmap: vec![0x2f, 0x02],
                     bounding_box: BoundingBox {
-                        size: (8, 8),
-                        offset: (0, 0),
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some((8, 0)),
+                    device_width: Some(Coord::new(8, 0)),
                     scalable_width: None,
                 },
             ],
@@ -203,10 +235,10 @@ ENDCHAR
                 version: 2.1,
                 name: String::from("\"open_iconic_all_1x\""),
                 point_size: 16,
-                resolution: (75, 75),
+                resolution: Coord::new(75, 75),
                 bounding_box: BoundingBox {
-                    size: (16, 16),
-                    offset: (0, 0),
+                    size: Coord::new(16, 16),
+                    offset: Coord::new(0, 0),
                 },
             }),
         );
@@ -217,23 +249,23 @@ ENDCHAR
                 Glyph {
                     bitmap: vec![0x1f, 0x01],
                     bounding_box: BoundingBox {
-                        size: (8, 8),
-                        offset: (0, 0),
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some((8, 0)),
+                    device_width: Some(Coord::new(8, 0)),
                     scalable_width: None,
                 },
                 Glyph {
                     bitmap: vec![0x2f, 0x02],
                     bounding_box: BoundingBox {
-                        size: (8, 8),
-                        offset: (0, 0),
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('@'), //64
                     name: "000".to_string(),
-                    device_width: Some((8, 0)),
+                    device_width: Some(Coord::new(8, 0)),
                     scalable_width: None,
                 }
             ]
@@ -259,10 +291,10 @@ ENDCHAR
                 version: 2.1,
                 name: String::from("\"windows_test\""),
                 point_size: 10,
-                resolution: (96, 96),
+                resolution: Coord::new(96, 96),
                 bounding_box: BoundingBox {
-                    size: (8, 16),
-                    offset: (0, -4),
+                    size: Coord::new(8, 16),
+                    offset: Coord::new(0, -4),
                 },
             })
         );
@@ -272,13 +304,13 @@ ENDCHAR
             vec![Glyph {
                 bitmap: vec![0xd5],
                 bounding_box: BoundingBox {
-                    size: (8, 16),
-                    offset: (0, -4),
+                    size: Coord::new(8, 16),
+                    offset: Coord::new(0, -4),
                 },
                 encoding: Some('\x00'),
                 name: "0".to_string(),
-                device_width: Some((8, 0)),
-                scalable_width: Some((600, 0)),
+                device_width: Some(Coord::new(8, 0)),
+                scalable_width: Some(Coord::new(600, 0)),
             },]
         );
 
