@@ -1,6 +1,9 @@
 use nom::{
-    bytes::complete::tag, character::complete::multispace0, character::complete::space1,
-    combinator::map, combinator::opt, multi::many0, sequence::separated_pair, IResult,
+    bytes::complete::tag,
+    character::complete::{multispace0, space1},
+    combinator::{map, opt},
+    sequence::separated_pair,
+    IResult,
 };
 use std::str::FromStr;
 
@@ -9,7 +12,7 @@ mod helpers;
 mod metadata;
 mod properties;
 
-pub use glyph::Glyph;
+pub use glyph::{Glyph, Glyphs};
 use helpers::*;
 pub use metadata::Metadata;
 pub use properties::{Properties, Property, PropertyValue};
@@ -21,7 +24,7 @@ pub struct BdfFont {
     pub metadata: Metadata,
 
     /// Glyphs.
-    pub glyphs: Vec<Glyph>,
+    pub glyphs: Glyphs,
 
     /// Properties.
     pub properties: Properties,
@@ -35,7 +38,7 @@ impl BdfFont {
         let (input, _) = multispace0(input)?;
         let (input, _) = opt(numchars)(input)?;
         let (input, _) = multispace0(input)?;
-        let (input, glyphs) = many0(Glyph::parse)(input)?;
+        let (input, glyphs) = Glyphs::parse(input)?;
         let (input, _) = multispace0(input)?;
         let (input, _) = opt(tag("ENDFONT"))(input)?;
         let (input, _) = multispace0(input)?;
@@ -163,7 +166,7 @@ ENDFONT
         );
 
         assert_eq!(
-            font.glyphs,
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
             vec![
                 Glyph {
                     bitmap: vec![0x1f, 0x01],
@@ -244,7 +247,7 @@ ENDCHAR
         );
 
         assert_eq!(
-            font.glyphs,
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
             vec![
                 Glyph {
                     bitmap: vec![0x1f, 0x01],
@@ -300,7 +303,7 @@ ENDCHAR
         );
 
         assert_eq!(
-            font.glyphs,
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
             vec![Glyph {
                 bitmap: vec![0xd5],
                 bounding_box: BoundingBox {

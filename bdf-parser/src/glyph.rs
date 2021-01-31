@@ -21,7 +21,7 @@ pub struct Glyph {
 }
 
 impl Glyph {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    fn parse(input: &str) -> IResult<&str, Self> {
         let (input, name) = statement("STARTCHAR", parse_string)(input)?;
         let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
         let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
@@ -63,6 +63,27 @@ fn parse_bitmap(input: &str) -> IResult<&str, Vec<u8>> {
 
 fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
     map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Glyphs {
+    glyphs: Vec<Glyph>,
+}
+
+impl Glyphs {
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        map(many0(Glyph::parse), |glyphs| Self { glyphs })(input)
+    }
+
+    /// Gets a glyph by the encoding.
+    pub fn get(&self, c: char) -> Option<&Glyph> {
+        self.glyphs.iter().find(|glyph| glyph.encoding == Some(c))
+    }
+
+    /// Returns an iterator over all glyphs.
+    pub fn iter(&self) -> impl Iterator<Item = &Glyph> {
+        self.glyphs.iter()
+    }
 }
 
 #[cfg(test)]
@@ -129,26 +150,26 @@ BITMAP
 00
 ENDCHAR"#;
 
-        assert_eq!(
-            Glyph::parse(chardata),
-            Ok((
-                "",
-                Glyph {
-                    name: "ZZZZ".to_string(),
-                    encoding: Some('A'), //65
-                    bitmap: vec![
-                        0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42,
-                        0x42, 0x42, 0x00, 0x00
-                    ],
-                    bounding_box: BoundingBox {
-                        size: Coord::new(8, 16),
-                        offset: Coord::new(0, -2),
-                    },
-                    scalable_width: Some(Coord::new(500, 0)),
-                    device_width: Coord::new(8, 0),
-                }
-            ))
-        );
+        let expected_glyph = Glyph {
+            name: "ZZZZ".to_string(),
+            encoding: Some('A'), //65
+            bitmap: vec![
+                0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42, 0x42,
+                0x00, 0x00,
+            ],
+            bounding_box: BoundingBox {
+                size: Coord::new(8, 16),
+                offset: Coord::new(0, -2),
+            },
+            scalable_width: Some(Coord::new(500, 0)),
+            device_width: Coord::new(8, 0),
+        };
+
+        assert_eq!(Glyph::parse(chardata), Ok(("", expected_glyph.clone())));
+
+        let (input, glyphs) = Glyphs::parse(chardata).unwrap();
+        assert!(input.is_empty());
+        assert_eq!(glyphs.get('A'), Some(&expected_glyph));
     }
 
     #[test]
