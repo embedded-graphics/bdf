@@ -99,10 +99,11 @@ impl Parse for CharacterRange {
 fn bounding_box_to_rectangle(bounding_box: &BoundingBox) -> Rectangle {
     Rectangle::new(
         Point::new(
-            bounding_box.offset.0,
-            -bounding_box.offset.1 - (bounding_box.size.1 as i32 - 1),
+            bounding_box.offset.x,
+            -bounding_box.offset.y - (bounding_box.size.y as i32 - 1),
         ),
-        Size::new(bounding_box.size.0, bounding_box.size.1),
+        // TODO: check for negative values
+        Size::new(bounding_box.size.x as u32, bounding_box.size.y as u32),
     )
 }
 
@@ -126,9 +127,9 @@ fn glyph_literal(glyph: &Glyph) -> Option<proc_macro2::TokenStream> {
     let rectangle = bounding_box_to_rectangle(&glyph.bounding_box);
     let bounding_box = rectangle_constructor(&rectangle);
 
-    // TODO: how should a missing device_width be handled?
     // TODO: handle height != 0
-    let device_width = glyph.device_width?.0;
+    // TODO: check for negative values
+    let device_width = glyph.device_width.x as u32;
 
     let bitmap = &glyph.bitmap;
     let data = quote! { &[ #( #bitmap ),* ] };
