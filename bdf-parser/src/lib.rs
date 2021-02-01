@@ -1,6 +1,9 @@
 use nom::{
-    bytes::complete::tag, character::complete::multispace0, character::complete::space1,
-    combinator::map, combinator::opt, multi::many0, sequence::separated_pair, IResult,
+    bytes::complete::tag,
+    character::complete::{multispace0, space1},
+    combinator::{map, opt},
+    sequence::separated_pair,
+    IResult,
 };
 use std::str::FromStr;
 
@@ -9,28 +12,33 @@ mod helpers;
 mod metadata;
 mod properties;
 
-pub use glyph::Glyph;
+pub use glyph::{Glyph, Glyphs};
 use helpers::*;
 pub use metadata::Metadata;
-use properties::parse_properties;
-pub use properties::{Properties, PropertyValue};
+pub use properties::{Properties, Property, PropertyValue};
 
+/// BDF Font.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BdfFont {
-    pub metadata: Option<Metadata>,
-    pub glyphs: Vec<Glyph>,
-    pub properties: Option<Properties>,
+    /// Font metadata.
+    pub metadata: Metadata,
+
+    /// Glyphs.
+    pub glyphs: Glyphs,
+
+    /// Properties.
+    pub properties: Properties,
 }
 
 impl BdfFont {
     fn parse(input: &str) -> IResult<&str, Self> {
-        let (input, metadata) = opt(Metadata::parse)(input)?;
+        let (input, metadata) = Metadata::parse(input)?;
         let (input, _) = multispace0(input)?;
-        let (input, properties) = opt(parse_properties)(input)?;
+        let (input, properties) = Properties::parse(input)?;
         let (input, _) = multispace0(input)?;
         let (input, _) = opt(numchars)(input)?;
         let (input, _) = multispace0(input)?;
-        let (input, glyphs) = many0(Glyph::parse)(input)?;
+        let (input, glyphs) = Glyphs::parse(input)?;
         let (input, _) = multispace0(input)?;
         let (input, _) = opt(tag("ENDFONT"))(input)?;
         let (input, _) = multispace0(input)?;
@@ -62,16 +70,46 @@ impl FromStr for BdfFont {
     }
 }
 
+/// Bounding box.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct BoundingBox {
-    pub size: (u32, u32),
-    pub offset: (i32, i32),
+    /// Size of the bounding box.
+    pub size: Coord,
+
+    /// Offset to the lower left corner of the bounding box.
+    pub offset: Coord,
+}
+
+/// Coordinate.
+///
+/// BDF files use a cartesian coordinate system, where the positive half-axis points upwards.
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Coord {
+    /// X coordinate.
+    pub x: i32,
+
+    /// Y coordinate.
+    pub y: i32,
+}
+
+impl Coord {
+    /// Creates a new coord.
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        map(
+            separated_pair(parse_to_i32, space1, parse_to_i32),
+            |(x, y)| Self::new(x, y),
+        )(input)
+    }
 }
 
 impl BoundingBox {
     pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
         map(
-            separated_pair(unsigned_xy, space1, signed_xy),
+            separated_pair(Coord::parse, space1, Coord::parse),
             |(size, offset)| Self { size, offset },
         )(input)
     }
@@ -80,7 +118,6 @@ impl BoundingBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use maplit::hashmap;
 
     #[test]
     fn it_parses_a_font_file() {
@@ -115,49 +152,53 @@ ENDFONT
         let font = BdfFont::from_str(chardata).unwrap();
 
         assert_eq!(
-            font,
-            BdfFont {
-                metadata: Some(Metadata {
-                    version: 2.1,
-                    name: String::from("\"test font\""),
-                    point_size: 16,
-                    resolution: (75, 75),
-                    bounding_box: BoundingBox {
-                        size: (16, 24),
-                        offset: (0, 0),
-                    },
-                }),
-                glyphs: vec![
-                    Glyph {
-                        bitmap: vec![0x1f, 0x01],
-                        bounding_box: BoundingBox {
-                            size: (8, 8),
-                            offset: (0, 0),
-                        },
-                        encoding: Some('@'), //64
-                        name: "000".to_string(),
-                        device_width: Some((8, 0)),
-                        scalable_width: None,
-                    },
-                    Glyph {
-                        bitmap: vec![0x2f, 0x02],
-                        bounding_box: BoundingBox {
-                            size: (8, 8),
-                            offset: (0, 0),
-                        },
-                        encoding: Some('@'), //64
-                        name: "000".to_string(),
-                        device_width: Some((8, 0)),
-                        scalable_width: None,
-                    },
-                ],
-                properties: Some(hashmap! {
-                    "COPYRIGHT".into() => PropertyValue::Text("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".into()),
-                    "FONT_ASCENT".into() => PropertyValue::Int(0),
-                    "FONT_DESCENT".into() => PropertyValue::Int(0),
-                })
+            font.metadata,
+            Metadata {
+                version: 2.1,
+                name: String::from("\"test font\""),
+                point_size: 16,
+                resolution: Coord::new(75, 75),
+                bounding_box: BoundingBox {
+                    size: Coord::new(16, 24),
+                    offset: Coord::new(0, 0),
+                },
             }
         );
+
+        assert_eq!(
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
+            vec![
+                Glyph {
+                    bitmap: vec![0x1f, 0x01],
+                    bounding_box: BoundingBox {
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
+                    },
+                    encoding: Some('@'), //64
+                    name: "000".to_string(),
+                    device_width: Coord::new(8, 0),
+                    scalable_width: None,
+                },
+                Glyph {
+                    bitmap: vec![0x2f, 0x02],
+                    bounding_box: BoundingBox {
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
+                    },
+                    encoding: Some('@'), //64
+                    name: "000".to_string(),
+                    device_width: Coord::new(8, 0),
+                    scalable_width: None,
+                },
+            ],
+        );
+
+        assert_eq!(
+            font.properties.try_get(Property::Copyright),
+            Ok("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".to_string())
+        );
+        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(0));
+        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(0));
     }
 
     #[test]
@@ -192,49 +233,53 @@ ENDCHAR
         let font = BdfFont::from_str(chardata).unwrap();
 
         assert_eq!(
-            font,
-            BdfFont {
-                metadata: Some(Metadata {
-                    version: 2.1,
-                    name: String::from("\"open_iconic_all_1x\""),
-                    point_size: 16,
-                    resolution: (75, 75),
-                    bounding_box: BoundingBox {
-                        size: (16, 16),
-                        offset: (0, 0),
-                    },
-                }),
-                glyphs: vec![
-                    Glyph {
-                        bitmap: vec![0x1f, 0x01],
-                        bounding_box: BoundingBox {
-                            size: (8, 8),
-                            offset: (0, 0),
-                        },
-                        encoding: Some('@'), //64
-                        name: "000".to_string(),
-                        device_width: Some((8, 0)),
-                        scalable_width: None,
-                    },
-                    Glyph {
-                        bitmap: vec![0x2f, 0x02],
-                        bounding_box: BoundingBox {
-                            size: (8, 8),
-                            offset: (0, 0),
-                        },
-                        encoding: Some('@'), //64
-                        name: "000".to_string(),
-                        device_width: Some((8, 0)),
-                        scalable_width: None,
-                    },
-                ],
-                properties: Some(hashmap! {
-                    "COPYRIGHT".into() => PropertyValue::Text("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".into()),
-                    "FONT_ASCENT".into() => PropertyValue::Int(0),
-                    "FONT_DESCENT".into() => PropertyValue::Int(0),
-                })
-            }
+            font.metadata,
+            Metadata {
+                version: 2.1,
+                name: String::from("\"open_iconic_all_1x\""),
+                point_size: 16,
+                resolution: Coord::new(75, 75),
+                bounding_box: BoundingBox {
+                    size: Coord::new(16, 16),
+                    offset: Coord::new(0, 0),
+                },
+            },
         );
+
+        assert_eq!(
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
+            vec![
+                Glyph {
+                    bitmap: vec![0x1f, 0x01],
+                    bounding_box: BoundingBox {
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
+                    },
+                    encoding: Some('@'), //64
+                    name: "000".to_string(),
+                    device_width: Coord::new(8, 0),
+                    scalable_width: None,
+                },
+                Glyph {
+                    bitmap: vec![0x2f, 0x02],
+                    bounding_box: BoundingBox {
+                        size: Coord::new(8, 8),
+                        offset: Coord::new(0, 0),
+                    },
+                    encoding: Some('@'), //64
+                    name: "000".to_string(),
+                    device_width: Coord::new(8, 0),
+                    scalable_width: None,
+                }
+            ]
+        );
+
+        assert_eq!(
+            font.properties.try_get(Property::Copyright),
+            Ok("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".to_string())
+        );
+        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(0));
+        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(0));
     }
 
     #[test]
@@ -244,31 +289,34 @@ ENDCHAR
         let font = BdfFont::from_str(windows_line_endings).unwrap();
 
         assert_eq!(
-            font,
-            BdfFont {
-                metadata: Some(Metadata {
-                    version: 2.1,
-                    name: String::from("\"windows_test\""),
-                    point_size: 10,
-                    resolution: (96, 96),
-                    bounding_box: BoundingBox {
-                        size: (8, 16),
-                        offset: (0, -4),
-                    },
-                }),
-                glyphs: vec![Glyph {
-                    bitmap: vec![0xd5],
-                    bounding_box: BoundingBox {
-                        size: (8, 16),
-                        offset: (0, -4),
-                    },
-                    encoding: Some('\x00'),
-                    name: "0".to_string(),
-                    device_width: Some((8, 0)),
-                    scalable_width: Some((600, 0)),
-                },],
-                properties: None
+            font.metadata,
+            Metadata {
+                version: 2.1,
+                name: String::from("\"windows_test\""),
+                point_size: 10,
+                resolution: Coord::new(96, 96),
+                bounding_box: BoundingBox {
+                    size: Coord::new(8, 16),
+                    offset: Coord::new(0, -4),
+                },
             }
         );
+
+        assert_eq!(
+            font.glyphs.iter().cloned().collect::<Vec<_>>(),
+            vec![Glyph {
+                bitmap: vec![0xd5],
+                bounding_box: BoundingBox {
+                    size: Coord::new(8, 16),
+                    offset: Coord::new(0, -4),
+                },
+                encoding: Some('\x00'),
+                name: "0".to_string(),
+                device_width: Coord::new(8, 0),
+                scalable_width: Some(Coord::new(600, 0)),
+            },]
+        );
+
+        assert!(font.properties.is_empty());
     }
 }

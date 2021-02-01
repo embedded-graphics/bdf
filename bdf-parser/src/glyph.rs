@@ -8,24 +8,24 @@ use nom::{
 };
 use std::convert::TryFrom;
 
-use crate::{helpers::*, BoundingBox};
+use crate::{helpers::*, BoundingBox, Coord};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
     pub name: String,
     pub encoding: Option<char>,
-    pub scalable_width: Option<(u32, u32)>,
-    pub device_width: Option<(u32, u32)>,
+    pub scalable_width: Option<Coord>,
+    pub device_width: Coord,
     pub bounding_box: BoundingBox,
     pub bitmap: Vec<u8>,
 }
 
 impl Glyph {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    fn parse(input: &str) -> IResult<&str, Self> {
         let (input, name) = statement("STARTCHAR", parse_string)(input)?;
         let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
-        let (input, scalable_width) = opt(statement("SWIDTH", unsigned_xy))(input)?;
-        let (input, device_width) = opt(statement("DWIDTH", unsigned_xy))(input)?;
+        let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
+        let (input, device_width) = statement("DWIDTH", Coord::parse)(input)?;
         let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
         let (input, _) = multispace0(input)?;
         let (input, bitmap) = parse_bitmap(input)?;
@@ -41,6 +41,25 @@ impl Glyph {
                 bitmap,
             },
         ))
+    }
+
+    /// Returns a pixel from the bitmap.
+    ///
+    /// This method doesn't use the BDF coordinate system. The coordinates are relative to the
+    /// top left corner of the bounding box and don't take the offset into account. Y coordinates
+    /// increase downwards.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if the coordinates are outside the bitmap.
+    pub fn pixel(&self, x: usize, y: usize) -> bool {
+        let width = usize::try_from(self.bounding_box.size.x).unwrap();
+
+        let bytes_per_row = (width + 7) / 8;
+        let byte_offset = x / 8;
+        let bit_mask = 0x80 >> (x % 8);
+
+        self.bitmap[byte_offset + bytes_per_row * y] & bit_mask != 0
     }
 }
 
@@ -63,6 +82,27 @@ fn parse_bitmap(input: &str) -> IResult<&str, Vec<u8>> {
 
 fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
     map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Glyphs {
+    glyphs: Vec<Glyph>,
+}
+
+impl Glyphs {
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        map(many0(Glyph::parse), |glyphs| Self { glyphs })(input)
+    }
+
+    /// Gets a glyph by the encoding.
+    pub fn get(&self, c: char) -> Option<&Glyph> {
+        self.glyphs.iter().find(|glyph| glyph.encoding == Some(c))
+    }
+
+    /// Returns an iterator over all glyphs.
+    pub fn iter(&self) -> impl Iterator<Item = &Glyph> {
+        self.glyphs.iter()
+    }
 }
 
 #[cfg(test)]
@@ -103,9 +143,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn it_parses_a_single_char() {
-        let chardata = r#"STARTCHAR ZZZZ
+    /// Returns test data for a single glyph and the expected parsing result
+    fn test_data() -> (&'static str, Glyph) {
+        (
+            r#"STARTCHAR ZZZZ
 ENCODING 65
 SWIDTH 500 0
 DWIDTH 8 0
@@ -127,27 +168,77 @@ BITMAP
 42
 00
 00
-ENDCHAR"#;
+ENDCHAR"#,
+            Glyph {
+                name: "ZZZZ".to_string(),
+                encoding: Some('A'), //65
+                bitmap: vec![
+                    0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42,
+                    0x42, 0x00, 0x00,
+                ],
+                bounding_box: BoundingBox {
+                    size: Coord::new(8, 16),
+                    offset: Coord::new(0, -2),
+                },
+                scalable_width: Some(Coord::new(500, 0)),
+                device_width: Coord::new(8, 0),
+            },
+        )
+    }
+
+    #[test]
+    fn it_parses_a_single_char() {
+        let (chardata, expected_glyph) = test_data();
+
+        assert_eq!(Glyph::parse(chardata), Ok(("", expected_glyph.clone())));
+    }
+
+    #[test]
+    fn get_glyph_by_char() {
+        let (chardata, expected_glyph) = test_data();
+
+        let (input, glyphs) = Glyphs::parse(chardata).unwrap();
+        assert!(input.is_empty());
+        assert_eq!(glyphs.get('A'), Some(&expected_glyph));
+    }
+
+    #[test]
+    fn access_pixels() {
+        let (chardata, _) = test_data();
+        let (input, glyph) = Glyph::parse(chardata).unwrap();
+        assert!(input.is_empty());
+
+        let bitmap = (0..16)
+            .map(|y| {
+                (0..8)
+                    .map(|x| if glyph.pixel(x, y) { '#' } else { ' ' })
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
 
         assert_eq!(
-            Glyph::parse(chardata),
-            Ok((
-                "",
-                Glyph {
-                    name: "ZZZZ".to_string(),
-                    encoding: Some('A'), //65
-                    bitmap: vec![
-                        0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42,
-                        0x42, 0x42, 0x00, 0x00
-                    ],
-                    bounding_box: BoundingBox {
-                        size: (8, 16),
-                        offset: (0, -2)
-                    },
-                    scalable_width: Some((500, 0)),
-                    device_width: Some((8, 0)),
-                }
-            ))
+            bitmap,
+            [
+                "        ", //
+                "        ", //
+                "        ", //
+                "        ", //
+                "   ##   ", //
+                "  #  #  ", //
+                "  #  #  ", //
+                " #    # ", //
+                " #    # ", //
+                " ###### ", //
+                " #    # ", //
+                " #    # ", //
+                " #    # ", //
+                " #    # ", //
+                "        ", //
+                "        ", //
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
         );
     }
 
@@ -168,13 +259,13 @@ ENDCHAR"#;
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
-                        size: (0, 0),
-                        offset: (0, 0)
+                        size: Coord::new(0, 0),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: None,
                     name: "000".to_string(),
-                    scalable_width: Some((432, 0)),
-                    device_width: Some((6, 0)),
+                    scalable_width: Some(Coord::new(432, 0)),
+                    device_width: Coord::new(6, 0),
                 }
             ))
         );
@@ -197,13 +288,13 @@ ENDCHAR"#;
                 Glyph {
                     bitmap: vec![],
                     bounding_box: BoundingBox {
-                        size: (0, 0),
-                        offset: (0, 0)
+                        size: Coord::new(0, 0),
+                        offset: Coord::new(0, 0),
                     },
                     encoding: Some('\x00'),
                     name: "000".to_string(),
-                    scalable_width: Some((432, 0)),
-                    device_width: Some((6, 0)),
+                    scalable_width: Some(Coord::new(432, 0)),
+                    device_width: Coord::new(6, 0),
                 }
             ))
         );

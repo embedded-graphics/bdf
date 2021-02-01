@@ -2,41 +2,136 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{digit1, multispace0, space1},
-    combinator::{map, map_opt, map_parser},
+    combinator::{map, map_opt, map_parser, opt},
     multi::many0,
     sequence::delimited,
     IResult, ParseTo,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
+use thiserror::Error;
 
 use crate::helpers::*;
 
+/// BDF file property.
+///
+/// Source: https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/XLFD/xlfd.html
+#[derive(Debug, PartialEq, Copy, Clone, Eq, PartialOrd, Ord, strum::Display)]
+#[strum(serialize_all = "shouty_snake_case")]
+pub enum Property {
+    AddStyleName,
+    AverageWidth,
+    AvgCapitalWidth,
+    AvgLowercaseWidth,
+    AxisLimits,
+    AxisNames,
+    AxisTypes,
+    CapHeight,
+    CharsetEncoding,
+    CharsetRegistry,
+    Copyright,
+    DefaultChar,
+    Destination,
+    EndSpace,
+    FaceName,
+    FamilyName,
+    FigureWidth,
+    Font,
+    FontAscent,
+    FontDescent,
+    FontType,
+    FontVersion,
+    Foundry,
+    FullName,
+    ItalicAngle,
+    MaxSpace,
+    MinSpace,
+    NormSpace,
+    Notice,
+    PixelSize,
+    PointSize,
+    QuadWidth,
+    RasterizerName,
+    RasterizerVersion,
+    RawAscent,
+    RawDescent,
+    RelativeSetwidth,
+    RelativeWeight,
+    Resolution,
+    ResolutionX,
+    ResolutionY,
+    SetwidthName,
+    Slant,
+    SmallCapSize,
+    Spacing,
+    StrikeoutAscent,
+    StrikeoutDescent,
+    SubscriptSize,
+    SubscriptX,
+    SubscriptY,
+    SuperscriptSize,
+    SuperscriptX,
+    SuperscriptY,
+    UnderlinePosition,
+    UnderlineThickness,
+    Weight,
+    WeightName,
+    XHeight,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum PropertyValue {
-    Text(String),
-    Int(i32),
+pub struct Properties {
+    properties: HashMap<String, PropertyValue>,
 }
 
-impl PropertyValue {
+impl Properties {
     pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
-        alt((property_value_string, property_value_int))(input)
+        map(
+            opt(map_parser(
+                delimited(
+                    num_properties,
+                    take_until("ENDPROPERTIES"),
+                    tag("ENDPROPERTIES"),
+                ),
+                many0(property),
+            )),
+            |properties| {
+                // Convert vector of properties into a HashMap
+                let properties = properties
+                    .map(|p| p.iter().cloned().collect())
+                    .unwrap_or_else(HashMap::new);
+
+                Self { properties }
+            },
+        )(input)
     }
-}
 
-pub type Properties = HashMap<String, PropertyValue>;
+    /// Tries to get a property.
+    ///
+    /// Returns an error if the property doesn't exist or the value has the wrong type.
+    pub fn try_get<T>(&self, property: Property) -> Result<T, PropertyError>
+    where
+        T: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
+    {
+        self.try_get_by_name(&property.to_string())
+    }
 
-fn property_value_string(input: &str) -> IResult<&str, PropertyValue> {
-    map(
-        map_opt(
-            delimited(tag("\""), take_until("\""), tag("\"")),
-            |s: &str| s.parse_to(),
-        ),
-        |s| PropertyValue::Text(s),
-    )(input)
-}
+    /// Tries to get a property by name.
+    ///
+    /// Returns an error if the property doesn't exist or the value has the wrong type.
+    pub fn try_get_by_name<T>(&self, name: &str) -> Result<T, PropertyError>
+    where
+        T: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
+    {
+        self.properties
+            .get(name)
+            .ok_or_else(|| PropertyError::Undefined(name.to_string()))
+            .and_then(TryFrom::try_from)
+    }
 
-fn property_value_int(input: &str) -> IResult<&str, PropertyValue> {
-    map(parse_to_i32, |i| PropertyValue::Int(i))(input)
+    /// Returns `true` if no properties exist.
+    pub fn is_empty(&self) -> bool {
+        self.properties.is_empty()
+    }
 }
 
 fn property(input: &str) -> IResult<&str, (String, PropertyValue)> {
@@ -53,24 +148,65 @@ fn num_properties(input: &str) -> IResult<&str, u32> {
     statement("STARTPROPERTIES", map_opt(digit1, |n: &str| n.parse_to()))(input)
 }
 
-pub fn parse_properties(input: &str) -> IResult<&str, Properties> {
-    map(
-        map_parser(
-            delimited(
-                num_properties,
-                take_until("ENDPROPERTIES"),
-                tag("ENDPROPERTIES"),
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyValue {
+    Text(String),
+    Int(i32),
+}
+
+impl PropertyValue {
+    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+        alt((Self::parse_string, Self::parse_int))(input)
+    }
+
+    fn parse_string(input: &str) -> IResult<&str, PropertyValue> {
+        map(
+            map_opt(
+                delimited(tag("\""), take_until("\""), tag("\"")),
+                |s: &str| s.parse_to(),
             ),
-            many0(property),
-        ),
-        |res| res.iter().cloned().collect::<Properties>(),
-    )(input)
+            |s| PropertyValue::Text(s),
+        )(input)
+    }
+
+    fn parse_int(input: &str) -> IResult<&str, PropertyValue> {
+        map(parse_to_i32, |i| PropertyValue::Int(i))(input)
+    }
+}
+
+impl TryFrom<&PropertyValue> for String {
+    type Error = PropertyError;
+
+    fn try_from(value: &PropertyValue) -> Result<Self, Self::Error> {
+        match value {
+            PropertyValue::Text(text) => Ok(text.clone()),
+            _ => Err(PropertyError::WrongType),
+        }
+    }
+}
+
+impl TryFrom<&PropertyValue> for i32 {
+    type Error = PropertyError;
+
+    fn try_from(value: &PropertyValue) -> Result<Self, Self::Error> {
+        match value {
+            PropertyValue::Int(int) => Ok(*int),
+            _ => Err(PropertyError::WrongType),
+        }
+    }
+}
+
+#[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PropertyError {
+    #[error("property \"{0}\" is undefined")]
+    Undefined(String),
+    #[error("wrong property type")]
+    WrongType,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use maplit::hashmap;
 
     #[test]
     fn it_parses_whitespacey_properties() {
@@ -129,7 +265,9 @@ mod tests {
         let input = r#"STARTPROPERTIES 0
 ENDPROPERTIES"#;
 
-        assert_eq!(parse_properties(input), Ok(("", Properties::new())));
+        let (input, properties) = Properties::parse(input).unwrap();
+        assert_eq!(input, "");
+        assert!(properties.is_empty());
     }
 
     #[test]
@@ -139,11 +277,41 @@ TEXT "FONT"
 INTEGER 10
 ENDPROPERTIES"#;
 
-        let expected: Properties = hashmap![
-            "TEXT".into() => PropertyValue::Text("FONT".into()),
-            "INTEGER".into() => PropertyValue::Int(10),
-        ];
+        let (input, properties) = Properties::parse(input).unwrap();
+        assert_eq!(input, "");
 
-        assert_eq!(parse_properties(input), Ok(("", expected)));
+        assert_eq!(properties.properties.len(), 2);
+        assert_eq!(properties.try_get_by_name("TEXT"), Ok("FONT".to_string()));
+        assert_eq!(properties.try_get_by_name("INTEGER"), Ok(10));
+    }
+
+    #[test]
+    fn try_get() {
+        let input = r#"STARTPROPERTIES 2
+FAMILY_NAME "FAMILY"
+RESOLUTION_X 100
+RESOLUTION_Y 75
+ENDPROPERTIES"#;
+
+        let (input, properties) = Properties::parse(input).unwrap();
+        assert_eq!(input, "");
+
+        assert_eq!(properties.properties.len(), 3);
+        assert_eq!(
+            properties.try_get(Property::FamilyName),
+            Ok("FAMILY".to_string())
+        );
+        assert_eq!(properties.try_get(Property::ResolutionX), Ok(100));
+        assert_eq!(properties.try_get(Property::ResolutionY), Ok(75));
+    }
+
+    #[test]
+    fn property_to_string() {
+        assert_eq!(&Property::Font.to_string(), "FONT");
+        assert_eq!(&Property::SuperscriptX.to_string(), "SUPERSCRIPT_X");
+        assert_eq!(
+            &Property::AvgLowercaseWidth.to_string(),
+            "AVG_LOWERCASE_WIDTH"
+        );
     }
 }
