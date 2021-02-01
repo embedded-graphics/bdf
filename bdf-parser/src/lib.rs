@@ -7,7 +7,7 @@
 use nom::{
     bytes::complete::tag,
     character::complete::{multispace0, space1},
-    combinator::{map, opt},
+    combinator::{eof, map, opt},
     sequence::separated_pair,
     IResult,
 };
@@ -37,41 +37,42 @@ pub struct BdfFont {
 }
 
 impl BdfFont {
-    fn parse(input: &str) -> IResult<&str, Self> {
-        let (input, metadata) = Metadata::parse(input)?;
-        let (input, _) = multispace0(input)?;
-        let (input, properties) = Properties::parse(input)?;
-        let (input, _) = multispace0(input)?;
-        let (input, _) = opt(numchars)(input)?;
-        let (input, _) = multispace0(input)?;
-        let (input, glyphs) = Glyphs::parse(input)?;
-        let (input, _) = multispace0(input)?;
-        let (input, _) = opt(tag("ENDFONT"))(input)?;
-        let (input, _) = multispace0(input)?;
+    fn parse(input: &str) -> Result<Self, ParserError> {
+        let (input, metadata) = Metadata::parse(input).map_err(|_| ParserError::Metadata)?;
+        let input = skip_whitespace(input);
+        let (input, properties) = Properties::parse(input).map_err(|_| ParserError::Properties)?;
+        let input = skip_whitespace(input);
+        let (input, glyphs) = Glyphs::parse(input).map_err(|_| ParserError::Glyphs)?;
+        let input = skip_whitespace(input);
+        let (input, _) = end_font(input).unwrap();
+        let input = skip_whitespace(input);
+        end_of_file(input).map_err(|_| ParserError::EndOfFile)?;
 
-        Ok((
-            input,
-            Self {
-                properties,
-                metadata,
-                glyphs,
-            },
-        ))
+        Ok(Self {
+            properties,
+            metadata,
+            glyphs,
+        })
     }
+}
+
+fn skip_whitespace(input: &str) -> &str {
+    multispace0::<_, nom::error::Error<_>>(input).unwrap().0
+}
+
+fn end_font(input: &str) -> IResult<&str, Option<&str>> {
+    opt(tag("ENDFONT"))(input)
+}
+
+fn end_of_file(input: &str) -> IResult<&str, &str> {
+    eof(input)
 }
 
 impl FromStr for BdfFont {
     type Err = ParserError;
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        let (remaining_input, font) = BdfFont::parse(source).map_err(|_| ParserError::Unknown)?;
-
-        //TODO: can this happen?
-        if !remaining_input.is_empty() {
-            return Err(ParserError::Unknown);
-        }
-
-        Ok(font)
+        BdfFont::parse(source)
     }
 }
 
@@ -123,9 +124,18 @@ impl BoundingBox {
 /// Parser error.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
 pub enum ParserError {
-    /// Unknown error.
-    #[error("unknown error")]
-    Unknown,
+    /// Metadata.
+    #[error("couldn't parse metadata")]
+    Metadata,
+    /// Properties.
+    #[error("couldn't parse properties")]
+    Properties,
+    /// Glyphs.
+    #[error("couldn't parse glyphs")]
+    Glyphs,
+    /// Unexpected input at the end of the file.
+    #[error("unexpected input at the end of the file")]
+    EndOfFile,
 }
 
 #[cfg(test)]
@@ -235,5 +245,13 @@ mod tests {
         let input = lines.join("\r\n");
 
         test_font(&BdfFont::from_str(&input).unwrap());
+    }
+
+    #[test]
+    fn garbage_after_endfont() {
+        let lines: Vec<_> = FONT.lines().chain(std::iter::once("Invalid")).collect();
+        let input = lines.join("\n");
+
+        assert_eq!(BdfFont::from_str(&input), Err(ParserError::EndOfFile));
     }
 }
