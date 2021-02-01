@@ -61,15 +61,14 @@ impl BdfFont {
 }
 
 impl FromStr for BdfFont {
-    // TODO: use better error type
-    type Err = ();
+    type Err = ParserError;
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
-        let (remaining_input, font) = BdfFont::parse(source).map_err(|_| ())?;
+        let (remaining_input, font) = BdfFont::parse(source).map_err(|_| ParserError::Unknown)?;
 
         //TODO: can this happen?
         if !remaining_input.is_empty() {
-            return Err(());
+            return Err(ParserError::Unknown);
         }
 
         Ok(font)
@@ -121,42 +120,49 @@ impl BoundingBox {
     }
 }
 
+/// Parser error.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
+pub enum ParserError {
+    /// Unknown error.
+    #[error("unknown error")]
+    Unknown,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
-    #[test]
-    fn it_parses_a_font_file() {
-        let chardata = r#"STARTFONT 2.1
-FONT "test font"
-SIZE 16 75 75
-FONTBOUNDINGBOX 16 24 0 0
-STARTPROPERTIES 3
-COPYRIGHT "https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE"
-FONT_ASCENT 0
-FONT_DESCENT 0
-ENDPROPERTIES
-STARTCHAR 000
-ENCODING 64
-DWIDTH 8 0
-BBX 8 8 0 0
-BITMAP
-1f
-01
-ENDCHAR
-STARTCHAR 000
-ENCODING 64
-DWIDTH 8 0
-BBX 8 8 0 0
-BITMAP
-2f
-02
-ENDCHAR
-ENDFONT
-"#;
+    const FONT: &'static str = indoc! {r#"
+        STARTFONT 2.1
+        FONT "test font"
+        SIZE 16 75 75
+        FONTBOUNDINGBOX 16 24 0 0
+        STARTPROPERTIES 3
+        COPYRIGHT "Copyright123"
+        FONT_ASCENT 1
+        FONT_DESCENT 2
+        ENDPROPERTIES
+        STARTCHAR Char 0
+        ENCODING 64
+        DWIDTH 8 0
+        BBX 8 8 0 0
+        BITMAP
+        1f
+        01
+        ENDCHAR
+        STARTCHAR Char 1
+        ENCODING 65
+        DWIDTH 8 0
+        BBX 8 8 0 0
+        BITMAP
+        2f
+        02
+        ENDCHAR
+        ENDFONT
+    "#};
 
-        let font = BdfFont::from_str(chardata).unwrap();
-
+    fn test_font(font: &BdfFont) {
         assert_eq!(
             font.metadata,
             Metadata {
@@ -181,7 +187,7 @@ ENDFONT
                         offset: Coord::new(0, 0),
                     },
                     encoding: Some('@'), //64
-                    name: "000".to_string(),
+                    name: "Char 0".to_string(),
                     device_width: Coord::new(8, 0),
                     scalable_width: None,
                 },
@@ -191,8 +197,8 @@ ENDFONT
                         size: Coord::new(8, 8),
                         offset: Coord::new(0, 0),
                     },
-                    encoding: Some('@'), //64
-                    name: "000".to_string(),
+                    encoding: Some('A'), //65
+                    name: "Char 1".to_string(),
                     device_width: Coord::new(8, 0),
                     scalable_width: None,
                 },
@@ -201,128 +207,33 @@ ENDFONT
 
         assert_eq!(
             font.properties.try_get(Property::Copyright),
-            Ok("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".to_string())
+            Ok("Copyright123".to_string())
         );
-        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(0));
-        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(0));
+        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(1));
+        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(2));
+    }
+
+    #[test]
+    fn it_parses_a_font_file() {
+        test_font(&BdfFont::from_str(FONT).unwrap())
     }
 
     #[test]
     fn it_parses_optional_endfont_tag() {
-        let chardata = r#"STARTFONT 2.1
-FONT "open_iconic_all_1x"
-SIZE 16 75 75
-FONTBOUNDINGBOX 16 16 0 0
-STARTPROPERTIES 3
-COPYRIGHT "https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE"
-FONT_ASCENT 0
-FONT_DESCENT 0
-ENDPROPERTIES
-STARTCHAR 000
-ENCODING 64
-DWIDTH 8 0
-BBX 8 8 0 0
-BITMAP
-1f
-01
-ENDCHAR
-STARTCHAR 000
-ENCODING 64
-DWIDTH 8 0
-BBX 8 8 0 0
-BITMAP
-2f
-02
-ENDCHAR
-"#;
+        let lines: Vec<_> = FONT
+            .lines()
+            .filter(|line| !line.contains("ENDFONT"))
+            .collect();
+        let input = lines.join("\n");
 
-        let font = BdfFont::from_str(chardata).unwrap();
-
-        assert_eq!(
-            font.metadata,
-            Metadata {
-                version: 2.1,
-                name: String::from("\"open_iconic_all_1x\""),
-                point_size: 16,
-                resolution: Coord::new(75, 75),
-                bounding_box: BoundingBox {
-                    size: Coord::new(16, 16),
-                    offset: Coord::new(0, 0),
-                },
-            },
-        );
-
-        assert_eq!(
-            font.glyphs.iter().cloned().collect::<Vec<_>>(),
-            vec![
-                Glyph {
-                    bitmap: vec![0x1f, 0x01],
-                    bounding_box: BoundingBox {
-                        size: Coord::new(8, 8),
-                        offset: Coord::new(0, 0),
-                    },
-                    encoding: Some('@'), //64
-                    name: "000".to_string(),
-                    device_width: Coord::new(8, 0),
-                    scalable_width: None,
-                },
-                Glyph {
-                    bitmap: vec![0x2f, 0x02],
-                    bounding_box: BoundingBox {
-                        size: Coord::new(8, 8),
-                        offset: Coord::new(0, 0),
-                    },
-                    encoding: Some('@'), //64
-                    name: "000".to_string(),
-                    device_width: Coord::new(8, 0),
-                    scalable_width: None,
-                }
-            ]
-        );
-
-        assert_eq!(
-            font.properties.try_get(Property::Copyright),
-            Ok("https://github.com/iconic/open-iconic, SIL OPEN FONT LICENSE".to_string())
-        );
-        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(0));
-        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(0));
+        test_font(&BdfFont::from_str(&input).unwrap());
     }
 
     #[test]
     fn it_handles_windows_line_endings() {
-        let windows_line_endings = "STARTFONT 2.1\r\nFONT \"windows_test\"\r\nSIZE 10 96 96\r\nFONTBOUNDINGBOX 8 16 0 -4\r\nCHARS 256\r\nSTARTCHAR 0\r\nENCODING 0\r\nSWIDTH 600 0\r\nDWIDTH 8 0\r\nBBX 8 16 0 -4\r\nBITMAP\r\nD5\r\nENDCHAR\r\nENDFONT\r\n";
+        let lines: Vec<_> = FONT.lines().collect();
+        let input = lines.join("\r\n");
 
-        let font = BdfFont::from_str(windows_line_endings).unwrap();
-
-        assert_eq!(
-            font.metadata,
-            Metadata {
-                version: 2.1,
-                name: String::from("\"windows_test\""),
-                point_size: 10,
-                resolution: Coord::new(96, 96),
-                bounding_box: BoundingBox {
-                    size: Coord::new(8, 16),
-                    offset: Coord::new(0, -4),
-                },
-            }
-        );
-
-        assert_eq!(
-            font.glyphs.iter().cloned().collect::<Vec<_>>(),
-            vec![Glyph {
-                bitmap: vec![0xd5],
-                bounding_box: BoundingBox {
-                    size: Coord::new(8, 16),
-                    offset: Coord::new(0, -4),
-                },
-                encoding: Some('\x00'),
-                name: "0".to_string(),
-                device_width: Coord::new(8, 0),
-                scalable_width: Some(Coord::new(600, 0)),
-            },]
-        );
-
-        assert!(font.properties.is_empty());
+        test_font(&BdfFont::from_str(&input).unwrap());
     }
 }
