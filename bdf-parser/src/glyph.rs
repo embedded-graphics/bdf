@@ -10,13 +10,25 @@ use std::convert::TryFrom;
 
 use crate::{helpers::*, BoundingBox, Coord};
 
+/// Glyph.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
+    /// Name.
     pub name: String,
+
+    /// Encoding.
     pub encoding: Option<char>,
+
+    /// Scalable width.
     pub scalable_width: Option<Coord>,
+
+    /// Device width.
     pub device_width: Coord,
+
+    /// Bounding box.
     pub bounding_box: BoundingBox,
+
+    /// Bitmap data.
     pub bitmap: Vec<u8>,
 }
 
@@ -84,6 +96,7 @@ fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
     map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
 }
 
+/// Glyphs collection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyphs {
     glyphs: Vec<Glyph>,

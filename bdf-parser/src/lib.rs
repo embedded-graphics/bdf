@@ -1,3 +1,9 @@
+//! BDF parser.
+
+#![deny(unsafe_code)]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
+
 use nom::{
     bytes::complete::tag,
     character::complete::{multispace0, space1},
@@ -15,7 +21,7 @@ mod properties;
 pub use glyph::{Glyph, Glyphs};
 use helpers::*;
 pub use metadata::Metadata;
-pub use properties::{Properties, Property, PropertyValue};
+pub use properties::{Properties, Property, PropertyError};
 
 /// BDF Font.
 #[derive(Debug, Clone, PartialEq)]

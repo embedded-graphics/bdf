@@ -7,12 +7,22 @@ use nom::{
 
 use crate::{helpers::*, BoundingBox, Coord};
 
+/// BDF file metadata.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
+    /// BDF format version.
     pub version: f32,
+
+    /// Font name.
     pub name: String,
+
+    /// Point size.
     pub point_size: i32,
+
+    /// X and Y resolution in DPI.
     pub resolution: Coord,
+
+    /// Font bounding box.
     pub bounding_box: BoundingBox,
 }
 

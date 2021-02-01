@@ -18,66 +18,125 @@ use crate::helpers::*;
 #[derive(Debug, PartialEq, Copy, Clone, Eq, PartialOrd, Ord, strum::Display)]
 #[strum(serialize_all = "shouty_snake_case")]
 pub enum Property {
+    /// ADD_STYLE_NAME
     AddStyleName,
+    /// AVERAGE_WIDTH
     AverageWidth,
+    /// AVG_CAPITAL_WIDTH
     AvgCapitalWidth,
+    /// AVG_LOWERCASE_WIDTH
     AvgLowercaseWidth,
+    /// AXIS_LIMITS
     AxisLimits,
+    /// AXIS_NAMES
     AxisNames,
+    /// AXIS_TYPES
     AxisTypes,
+    /// CAP_HEIGHT
     CapHeight,
+    /// CHARSET_ENCODING
     CharsetEncoding,
+    /// CHARSET_REGISTRY
     CharsetRegistry,
+    /// COPYRIGHT
     Copyright,
+    /// DEFAULT_CHAR
     DefaultChar,
+    /// DESTINATION
     Destination,
+    /// END_SPACE
     EndSpace,
+    /// FACE_NAME
     FaceName,
+    /// FAMILY_NAME
     FamilyName,
+    /// FIGURE_WIDTH
     FigureWidth,
+    /// FONT
     Font,
+    /// FONT_ASCENT
     FontAscent,
+    /// FONT_DESCENT
     FontDescent,
+    /// FONT_TYPE
     FontType,
+    /// FONT_VERSION
     FontVersion,
+    /// FOUNDRY
     Foundry,
+    /// FULL_NAME
     FullName,
+    /// ITALIC_ANGLE
     ItalicAngle,
+    /// MAX_SPACE
     MaxSpace,
+    /// MIN_SPACE
     MinSpace,
+    /// NORM_SPACE
     NormSpace,
+    /// NOTICE
     Notice,
+    /// PIXEL_SIZE
     PixelSize,
+    /// POINT_SIZE
     PointSize,
+    /// QUAD_WIDTH
     QuadWidth,
+    /// RASTERIZER_NAME
     RasterizerName,
+    /// RASTERIZER_VERSION
     RasterizerVersion,
+    /// RAW_ASCENT
     RawAscent,
+    /// RAW_DESCENT
     RawDescent,
+    /// RELATIVE_SETWIDTH
     RelativeSetwidth,
+    /// RELATIVE_WEIGHT
     RelativeWeight,
+    /// RESOLUTION
     Resolution,
+    /// RESOLUTION_X
     ResolutionX,
+    /// RESOLUTION_Y
     ResolutionY,
+    /// SETWIDTH_NAME
     SetwidthName,
+    /// SLANT
     Slant,
+    /// SMALL_CAP_SIZE
     SmallCapSize,
+    /// SPACING
     Spacing,
+    /// STRIKEOUT_ASCENT
     StrikeoutAscent,
+    /// STRIKEOUT_DESCENT
     StrikeoutDescent,
+    /// SUBSCRIPT_SIZE
     SubscriptSize,
+    /// SUBSCRIPT_X
     SubscriptX,
+    /// SUBSCRIPT_Y
     SubscriptY,
+    /// SUPERSCRIPT_SIZE
     SuperscriptSize,
+    /// SUPERSCRIPT_X
     SuperscriptX,
+    /// SUPERSCRIPT_Y
     SuperscriptY,
+    /// UNDERLINE_POSITION
     UnderlinePosition,
+    /// UNDERLINE_THICKNESS
     UnderlineThickness,
+    /// WEIGHT
     Weight,
+    /// WEIGHT_NAME
     WeightName,
+    /// X_HEIGHT
     XHeight,
 }
 
+/// BDF file properties.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Properties {
     properties: HashMap<String, PropertyValue>,
@@ -196,10 +255,13 @@ impl TryFrom<&PropertyValue> for i32 {
     }
 }
 
+/// Error returned by property getters.
 #[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PropertyError {
+    /// Undefined property.
     #[error("property \"{0}\" is undefined")]
     Undefined(String),
+    /// Wrong property type.
     #[error("wrong property type")]
     WrongType,
 }
