@@ -1,6 +1,6 @@
 use nom::{
     bytes::complete::{tag, take, take_until},
-    character::complete::multispace0,
+    character::complete::{multispace0, space0},
     combinator::{map, map_parser, map_res, opt},
     multi::many0,
     sequence::{delimited, preceded, terminated},
@@ -10,13 +10,25 @@ use std::convert::TryFrom;
 
 use crate::{helpers::*, BoundingBox, Coord};
 
+/// Glyph.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyph {
+    /// Name.
     pub name: String,
+
+    /// Encoding.
     pub encoding: Option<char>,
+
+    /// Scalable width.
     pub scalable_width: Option<Coord>,
+
+    /// Device width.
     pub device_width: Coord,
+
+    /// Bounding box.
     pub bounding_box: BoundingBox,
+
+    /// Bitmap data.
     pub bitmap: Vec<u8>,
 }
 
@@ -84,6 +96,7 @@ fn parse_hex_byte(input: &str) -> IResult<&str, u8> {
     map_res(take(2usize), |v| u8::from_str_radix(v, 16))(input)
 }
 
+/// Glyphs collection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyphs {
     glyphs: Vec<Glyph>,
@@ -91,7 +104,10 @@ pub struct Glyphs {
 
 impl Glyphs {
     pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
-        map(many0(Glyph::parse), |glyphs| Self { glyphs })(input)
+        map(
+            preceded(terminated(opt(numchars), multispace0), many0(Glyph::parse)),
+            |glyphs| Self { glyphs },
+        )(input)
     }
 
     /// Gets a glyph by the encoding.
@@ -103,6 +119,13 @@ impl Glyphs {
     pub fn iter(&self) -> impl Iterator<Item = &Glyph> {
         self.glyphs.iter()
     }
+}
+
+fn numchars(input: &str) -> IResult<&str, u32> {
+    preceded(
+        space0,
+        preceded(tag("CHARS"), preceded(space0, parse_to_u32)),
+    )(input)
 }
 
 #[cfg(test)]

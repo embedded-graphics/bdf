@@ -23,3 +23,6 @@ travis-ci = { repository = "jamwaffles/embedded-fonts", branch = "master" }
 nom = "6.0.1"
 strum = { version = "0.20.0", features = ["derive"] }
 thiserror = "1.0.23"
+
+[dev-dependencies]
+indoc = "1.0.3"

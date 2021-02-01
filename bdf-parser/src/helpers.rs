@@ -35,13 +35,6 @@ where
     delimited(many0(comment), inner, many0(comment))
 }
 
-pub fn numchars(input: &str) -> IResult<&str, u32> {
-    preceded(
-        space0,
-        preceded(tag("CHARS"), preceded(space0, parse_to_u32)),
-    )(input)
-}
-
 pub fn take_until_line_ending(input: &str) -> IResult<&str, &str> {
     take_while(|c| c != '\n' && c != '\r')(input)
 }
