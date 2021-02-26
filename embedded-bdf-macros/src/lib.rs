@@ -153,9 +153,9 @@ pub fn include_bdf(input: TokenStream) -> TokenStream {
     path.push(&input.filename.value());
 
     // TODO: handle errors
-    let bdf = fs::read_to_string(&path).unwrap();
+    let bdf = fs::read(&path).unwrap();
 
-    let font = bdf.parse::<BdfFont>().unwrap();
+    let font = BdfFont::parse(&bdf).unwrap();
 
     //TODO: sort glyphs to make it possible to use binary search
     let glyphs: Vec<_> = font

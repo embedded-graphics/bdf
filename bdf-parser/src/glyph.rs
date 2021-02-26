@@ -39,7 +39,6 @@ impl Glyph {
         let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
         let (input, device_width) = statement("DWIDTH", Coord::parse)(input)?;
         let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
-        let (input, _) = multispace0(input)?;
         let (input, bitmap) = parse_bitmap(input)?;
 
         Ok((
@@ -108,7 +107,10 @@ pub struct Glyphs {
 impl Glyphs {
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         map(
-            preceded(terminated(opt(numchars), multispace0), many0(Glyph::parse)),
+            preceded(
+                terminated(opt(numchars), multispace0),
+                many0(terminated(Glyph::parse, multispace0)),
+            ),
             |glyphs| Self { glyphs },
         )(input)
     }
