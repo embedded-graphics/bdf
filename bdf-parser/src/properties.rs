@@ -1,9 +1,9 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
-    character::complete::{digit1, multispace0, space1},
-    combinator::{map, map_opt, map_parser, opt},
-    multi::many0,
+    character::complete::{multispace0, space1},
+    combinator::{eof, map, map_opt, map_parser, opt},
+    multi::{many0, many1},
     sequence::delimited,
     IResult, ParseTo,
 };
@@ -143,13 +143,13 @@ pub struct Properties {
 }
 
 impl Properties {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         map(
             opt(map_parser(
                 delimited(
-                    num_properties,
+                    statement("STARTPROPERTIES", parse_to_u32),
                     take_until("ENDPROPERTIES"),
-                    tag("ENDPROPERTIES"),
+                    statement("ENDPROPERTIES", eof),
                 ),
                 many0(property),
             )),
@@ -193,18 +193,14 @@ impl Properties {
     }
 }
 
-fn property(input: &str) -> IResult<&str, (String, PropertyValue)> {
+fn property(input: &[u8]) -> IResult<&[u8], (String, PropertyValue)> {
     let (input, _) = multispace0(input)?;
-    let (input, key) = map_opt(take_until(" "), |s: &str| s.parse_to())(input)?;
+    let (input, key) = map_opt(take_until(" "), |s: &[u8]| s.parse_to())(input)?;
     let (input, _) = space1(input)?;
     let (input, value) = PropertyValue::parse(input)?;
     let (input, _) = multispace0(input)?;
 
     Ok((input, (key, value)))
-}
-
-fn num_properties(input: &str) -> IResult<&str, u32> {
-    statement("STARTPROPERTIES", map_opt(digit1, |n: &str| n.parse_to()))(input)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -214,21 +210,24 @@ pub enum PropertyValue {
 }
 
 impl PropertyValue {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         alt((Self::parse_string, Self::parse_int))(input)
     }
 
-    fn parse_string(input: &str) -> IResult<&str, PropertyValue> {
+    fn parse_string(input: &[u8]) -> IResult<&[u8], PropertyValue> {
         map(
-            map_opt(
-                delimited(tag("\""), take_until("\""), tag("\"")),
-                |s: &str| s.parse_to(),
-            ),
-            |s| PropertyValue::Text(s),
+            many1(delimited(tag("\""), take_until("\""), tag("\""))),
+            |parts| {
+                let parts: Vec<_> = parts
+                    .iter()
+                    .map(|part| ascii_to_string_lossy(*part))
+                    .collect();
+                PropertyValue::Text(parts.join("\""))
+            },
         )(input)
     }
 
-    fn parse_int(input: &str) -> IResult<&str, PropertyValue> {
+    fn parse_int(input: &[u8]) -> IResult<&[u8], PropertyValue> {
         map(parse_to_i32, |i| PropertyValue::Int(i))(input)
     }
 }
@@ -269,78 +268,90 @@ pub enum PropertyError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
-    fn it_parses_whitespacey_properties() {
-        assert_eq!(
-            property("KEY   \"VALUE\""),
-            Ok((
-                "",
-                ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
-            ))
+    fn parse_property_with_whitespace() {
+        assert_parser_ok!(
+            property(b"KEY   \"VALUE\""),
+            ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
         );
 
-        assert_eq!(
-            property("KEY   \"RANDOM WORDS AND STUFF\""),
-            Ok((
-                "",
-                (
-                    "KEY".to_string(),
-                    PropertyValue::Text("RANDOM WORDS AND STUFF".to_string())
-                )
-            ))
+        assert_parser_ok!(
+            property(b"KEY   \"RANDOM WORDS AND STUFF\""),
+            (
+                "KEY".to_string(),
+                PropertyValue::Text("RANDOM WORDS AND STUFF".to_string())
+            )
         );
     }
 
     #[test]
-    fn it_parses_string_properties() {
-        assert_eq!(
-            property("KEY \"VALUE\""),
-            Ok((
-                "",
-                ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
-            ))
+    fn parse_string_property() {
+        assert_parser_ok!(
+            property(b"KEY \"VALUE\""),
+            ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
         );
     }
 
     #[test]
-    fn it_parses_integer_properties() {
-        assert_eq!(
-            property("POSITIVE_NUMBER 10"),
-            Ok((
-                "",
-                ("POSITIVE_NUMBER".to_string(), PropertyValue::Int(10i32))
-            ))
-        );
-
-        assert_eq!(
-            property("NEGATIVE_NUMBER -10"),
-            Ok((
-                "",
-                ("NEGATIVE_NUMBER".to_string(), PropertyValue::Int(-10i32))
-            ))
+    fn parse_string_property_with_quote_in_value() {
+        assert_parser_ok!(
+            property(br#"WITH_QUOTE "1""23""""#),
+            (
+                "WITH_QUOTE".to_string(),
+                PropertyValue::Text("1\"23\"".to_string())
+            )
         );
     }
 
     #[test]
-    fn it_parses_empty_properties() {
-        let input = r#"STARTPROPERTIES 0
-ENDPROPERTIES"#;
+    fn parse_string_property_with_invalid_ascii() {
+        assert_parser_ok!(
+            property(b"KEY \"VALUE\xAB\""),
+            (
+                "KEY".to_string(),
+                PropertyValue::Text("VALUE\u{FFFD}".to_string())
+            )
+        );
+    }
+
+    #[test]
+    fn parse_integer_property() {
+        assert_parser_ok!(
+            property(b"POSITIVE_NUMBER 10"),
+            ("POSITIVE_NUMBER".to_string(), PropertyValue::Int(10i32))
+        );
+
+        assert_parser_ok!(
+            property(b"NEGATIVE_NUMBER -10"),
+            ("NEGATIVE_NUMBER".to_string(), PropertyValue::Int(-10i32))
+        );
+    }
+
+    #[test]
+    fn parse_empty_property_list() {
+        let input = indoc! {br#"
+            STARTPROPERTIES 0
+            ENDPROPERTIES
+        "#};
 
         let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, "");
+        assert_eq!(input, b"");
         assert!(properties.is_empty());
     }
 
     #[test]
-    fn it_parses_properties() {
-        let input = r#"STARTPROPERTIES 2
-TEXT "FONT"
-INTEGER 10
-ENDPROPERTIES"#;
+    fn parse_properties() {
+        let input = indoc! {br#"
+            STARTPROPERTIES 2
+            TEXT "FONT"
+            INTEGER 10
+            ENDPROPERTIES
+        "#};
 
         let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, "");
+        assert_eq!(input, b"");
 
         assert_eq!(properties.properties.len(), 2);
         assert_eq!(properties.try_get_by_name("TEXT"), Ok("FONT".to_string()));
@@ -349,14 +360,16 @@ ENDPROPERTIES"#;
 
     #[test]
     fn try_get() {
-        let input = r#"STARTPROPERTIES 2
-FAMILY_NAME "FAMILY"
-RESOLUTION_X 100
-RESOLUTION_Y 75
-ENDPROPERTIES"#;
+        let input = indoc! {br#"
+            STARTPROPERTIES 2
+            FAMILY_NAME "FAMILY"
+            RESOLUTION_X 100
+            RESOLUTION_Y 75
+            ENDPROPERTIES
+        "#};
 
         let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, "");
+        assert_eq!(input, b"");
 
         assert_eq!(properties.properties.len(), 3);
         assert_eq!(
