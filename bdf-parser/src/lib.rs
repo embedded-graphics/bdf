@@ -119,17 +119,20 @@ impl BoundingBox {
 }
 
 /// Parser error.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ParserError {
     /// Metadata.
     #[error("couldn't parse metadata")]
     Metadata,
+
     /// Properties.
     #[error("couldn't parse properties")]
     Properties,
+
     /// Glyphs.
     #[error("couldn't parse glyphs")]
     Glyphs,
+
     /// Unexpected input at the end of the file.
     #[error("unexpected input at the end of the file")]
     EndOfFile,

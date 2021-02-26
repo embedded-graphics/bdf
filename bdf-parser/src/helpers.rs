@@ -4,7 +4,7 @@ use bstr::ByteSlice;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until, take_while},
-    character::complete::{digit1, line_ending, one_of, space0, space1},
+    character::complete::{digit1, line_ending, multispace0, one_of, space0, space1},
     combinator::{eof, map, map_opt, opt, recognize},
     multi::many0,
     sequence::{delimited, preceded},
@@ -73,7 +73,7 @@ where
     move |input: &[u8]| {
         let (input, _) = tag(keyword)(input)?;
         let (input, p) = alt((preceded(space1, take_until_line_ending), space0))(input)?;
-        let (input, _) = opt(line_ending)(input)?;
+        let (input, _) = multispace0(input)?;
 
         let (inner_input, output) = parameters(p.trim())?;
         eof(inner_input)?;
