@@ -20,6 +20,7 @@ exclude = [
 travis-ci = { repository = "jamwaffles/embedded-fonts", branch = "master" }
 
 [dependencies]
+bstr = "0.2.15"
 nom = "6.0.1"
 strum = { version = "0.20.0", features = ["derive"] }
 thiserror = "1.0.23"

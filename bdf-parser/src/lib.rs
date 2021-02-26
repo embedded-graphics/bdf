@@ -11,10 +11,11 @@ use nom::{
     sequence::separated_pair,
     IResult,
 };
-use std::str::FromStr;
+
+#[macro_use]
+mod helpers;
 
 mod glyph;
-mod helpers;
 mod metadata;
 mod properties;
 
@@ -37,7 +38,11 @@ pub struct BdfFont {
 }
 
 impl BdfFont {
-    fn parse(input: &str) -> Result<Self, ParserError> {
+    /// Parses a BDF file.
+    ///
+    /// BDF files are expected to be ASCII encoded according to the BDF specification. Any non
+    /// ASCII characters in strings will be replaced by the `U+FFFD` replacement character.
+    pub fn parse(input: &[u8]) -> Result<Self, ParserError> {
         let (input, metadata) = Metadata::parse(input).map_err(|_| ParserError::Metadata)?;
         let input = skip_whitespace(input);
         let (input, properties) = Properties::parse(input).map_err(|_| ParserError::Properties)?;
@@ -56,24 +61,16 @@ impl BdfFont {
     }
 }
 
-fn skip_whitespace(input: &str) -> &str {
+fn skip_whitespace(input: &[u8]) -> &[u8] {
     multispace0::<_, nom::error::Error<_>>(input).unwrap().0
 }
 
-fn end_font(input: &str) -> IResult<&str, Option<&str>> {
+fn end_font(input: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
     opt(tag("ENDFONT"))(input)
 }
 
-fn end_of_file(input: &str) -> IResult<&str, &str> {
+fn end_of_file(input: &[u8]) -> IResult<&[u8], &[u8]> {
     eof(input)
-}
-
-impl FromStr for BdfFont {
-    type Err = ParserError;
-
-    fn from_str(source: &str) -> Result<Self, Self::Err> {
-        BdfFont::parse(source)
-    }
 }
 
 /// Bounding box.
@@ -104,7 +101,7 @@ impl Coord {
         Self { x, y }
     }
 
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         map(
             separated_pair(parse_to_i32, space1, parse_to_i32),
             |(x, y)| Self::new(x, y),
@@ -113,7 +110,7 @@ impl Coord {
 }
 
 impl BoundingBox {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         map(
             separated_pair(Coord::parse, space1, Coord::parse),
             |(size, offset)| Self { size, offset },
@@ -224,34 +221,37 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_a_font_file() {
-        test_font(&BdfFont::from_str(FONT).unwrap())
+    fn parse_font() {
+        test_font(&BdfFont::parse(FONT.as_bytes()).unwrap())
     }
 
     #[test]
-    fn it_parses_optional_endfont_tag() {
+    fn parse_font_without_endfont() {
         let lines: Vec<_> = FONT
             .lines()
             .filter(|line| !line.contains("ENDFONT"))
             .collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::from_str(&input).unwrap());
+        test_font(&BdfFont::parse(input.as_bytes()).unwrap());
     }
 
     #[test]
-    fn it_handles_windows_line_endings() {
+    fn parse_font_with_windows_line_endings() {
         let lines: Vec<_> = FONT.lines().collect();
         let input = lines.join("\r\n");
 
-        test_font(&BdfFont::from_str(&input).unwrap());
+        test_font(&BdfFont::parse(input.as_bytes()).unwrap());
     }
 
     #[test]
-    fn garbage_after_endfont() {
+    fn parse_font_with_garbage_after_endfont() {
         let lines: Vec<_> = FONT.lines().chain(std::iter::once("Invalid")).collect();
         let input = lines.join("\n");
 
-        assert_eq!(BdfFont::from_str(&input), Err(ParserError::EndOfFile));
+        assert_eq!(
+            BdfFont::parse(input.as_bytes()),
+            Err(ParserError::EndOfFile)
+        );
     }
 }

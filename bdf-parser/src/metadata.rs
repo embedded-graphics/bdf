@@ -1,6 +1,6 @@
 use nom::{
     character::complete::{multispace0, space1},
-    combinator::{map, map_opt},
+    combinator::map_opt,
     sequence::separated_pair,
     IResult, ParseTo,
 };
@@ -27,7 +27,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub(crate) fn parse(input: &str) -> IResult<&str, Self> {
+    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         let (input, version) = skip_comments(metadata_version)(input)?;
         let (input, name) = skip_comments(metadata_name)(input)?;
         let (input, (point_size, resolution)) = skip_comments(metadata_size)(input)?;
@@ -47,21 +47,21 @@ impl Metadata {
     }
 }
 
-fn metadata_version(input: &str) -> IResult<&str, f32> {
-    map_opt(statement("STARTFONT", take_until_line_ending), |v: &str| {
-        v.parse_to()
+fn metadata_version(input: &[u8]) -> IResult<&[u8], f32> {
+    map_opt(statement("STARTFONT", parse_string), |v: String| {
+        v.as_str().parse_to()
     })(input)
 }
 
-fn metadata_name(input: &str) -> IResult<&str, String> {
-    map(statement("FONT", take_until_line_ending), String::from)(input)
+fn metadata_name(input: &[u8]) -> IResult<&[u8], String> {
+    statement("FONT", parse_string)(input)
 }
 
-fn metadata_size(input: &str) -> IResult<&str, (i32, Coord)> {
+fn metadata_size(input: &[u8]) -> IResult<&[u8], (i32, Coord)> {
     statement("SIZE", separated_pair(parse_to_i32, space1, Coord::parse))(input)
 }
 
-fn metadata_bounding_box(input: &str) -> IResult<&str, BoundingBox> {
+fn metadata_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
     statement("FONTBOUNDINGBOX", BoundingBox::parse)(input)
 }
 
@@ -70,35 +70,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_parses_the_font_version() {
-        assert_eq!(metadata_version("STARTFONT 2.1\n"), Ok(("", 2.1f32)));
+    fn parse_bdf_version() {
+        assert_parser_ok!(metadata_version(b"STARTFONT 2.1\n"), 2.1f32);
 
         // Some fonts are a bit overzealous with their whitespace
-        assert_eq!(metadata_version("STARTFONT   2.1\n"), Ok(("", 2.1f32)));
+        assert_parser_ok!(metadata_version(b"STARTFONT   2.1\n"), 2.1f32);
     }
 
     #[test]
-    fn it_parses_header() {
-        let input = r#"STARTFONT 2.1
+    fn parse_font_name() {
+        assert_parser_ok!(metadata_name(b"FONT abc"), "abc".to_string());
+    }
+
+    #[test]
+    fn parse_metadata() {
+        let input = br#"STARTFONT 2.1
 FONT "test font"
 SIZE 16 75 100
 FONTBOUNDINGBOX 16 24 1 2"#;
 
-        assert_eq!(
+        assert_parser_ok!(
             Metadata::parse(input),
-            Ok((
-                "",
-                Metadata {
-                    version: 2.1,
-                    name: String::from("\"test font\""),
-                    point_size: 16,
-                    resolution: Coord::new(75, 100),
-                    bounding_box: BoundingBox {
-                        size: Coord::new(16, 24),
-                        offset: Coord::new(1, 2),
-                    }
+            Metadata {
+                version: 2.1,
+                name: String::from("\"test font\""),
+                point_size: 16,
+                resolution: Coord::new(75, 100),
+                bounding_box: BoundingBox {
+                    size: Coord::new(16, 24),
+                    offset: Coord::new(1, 2),
                 }
-            ))
+            }
         );
     }
 }
