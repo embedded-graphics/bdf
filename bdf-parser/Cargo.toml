@@ -1,23 +1,13 @@
 [package]
 name = "bdf-parser"
-description = "Parse BDF files"
+description = "BDF font parser"
 version = "0.1.0"
 edition = "2018"
-authors = ["James Waples <jamwaffles@gmail.com>"]
-repository = "https://github.com/jamwaffles/embedded-fonts"
-documentation = "https://jamwaffles.github.io/embedded-fonts"
+authors = ["James Waples <jamwaffles@gmail.com>", "Ralf Fuest <mail@rfuest.de>"]
+repository = "https://github.com/embedded-graphics/bdf"
 categories = ["parser-implementations"]
 keywords = ["parser", "bdf", "font", "nom"]
-readme = "README.md"
 license = "MIT OR Apache-2.0"
-exclude = [
-	".travis.yml",
-	".gitignore",
-	"tests"
-]
-
-[badges]
-travis-ci = { repository = "jamwaffles/embedded-fonts", branch = "master" }
 
 [dependencies]
 bstr = "0.2.15"

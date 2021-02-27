@@ -2,6 +2,6 @@
 
 members = [
     "bdf-parser",
-    "embedded-bdf",
-    "embedded-bdf-macros",
+    "eg-bdf",
+    "eg-bdf-macros",
 ]

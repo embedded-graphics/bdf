@@ -1,4 +1,4 @@
-use embedded_bdf::{include_bdf, text::BdfTextStyle, BdfFont};
+use eg_bdf::{include_bdf, text::BdfTextStyle, BdfFont};
 use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
