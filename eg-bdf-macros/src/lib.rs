@@ -135,7 +135,7 @@ fn glyph_literal(glyph: &Glyph) -> Option<proc_macro2::TokenStream> {
     let data = quote! { &[ #( #bitmap ),* ] };
 
     Some(quote! {
-        ::embedded_bdf::BdfGlyph {
+        ::eg_bdf::BdfGlyph {
             character: #character,
             bounding_box: #bounding_box,
             device_width: #device_width,
@@ -166,7 +166,7 @@ pub fn include_bdf(input: TokenStream) -> TokenStream {
         .collect();
 
     let output = quote! {
-        ::embedded_bdf::BdfFont {
+        ::eg_bdf::BdfFont {
             glyphs: &[ #( #glyphs ),* ]
         }
     };

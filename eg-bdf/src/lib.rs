@@ -2,7 +2,7 @@
 
 use embedded_graphics::{prelude::*, primitives::Rectangle};
 
-pub use embedded_bdf_macros::include_bdf;
+pub use eg_bdf_macros::include_bdf;
 
 pub mod text;
 
