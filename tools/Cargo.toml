@@ -1,5 +1,4 @@
 [workspace]
-
 members = [
     "test-bdf-parser",
 ]

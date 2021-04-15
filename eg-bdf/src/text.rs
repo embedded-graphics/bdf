@@ -1,7 +1,10 @@
 use embedded_graphics::{
     prelude::*,
     primitives::Rectangle,
-    text::{CharacterStyle, TextMetrics, TextRenderer, VerticalAlignment},
+    text::{
+        renderer::{CharacterStyle, TextMetrics, TextRenderer},
+        Baseline,
+    },
 };
 
 use crate::BdfFont;
@@ -47,19 +50,20 @@ where
         &self,
         text: &str,
         mut position: Point,
+        baseline: Baseline,
         target: &mut D,
     ) -> Result<Point, D::Error>
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        for c in text.chars() {
-            if let Some(glyph) = self.font.get_glyph(c) {
-                glyph.draw(position, self.color, target)?;
+        // TODO: handle baseline
 
-                position.x += glyph.device_width as i32;
-            } else {
-                //TODO: how should missing glyphs be handled?
-            }
+        for c in text.chars() {
+            let glyph = self.font.get_glyph(c);
+
+            glyph.draw(position, self.color, &self.font.data, target)?;
+
+            position.x += glyph.device_width as i32;
         }
 
         Ok(position)
@@ -69,20 +73,22 @@ where
         &self,
         width: u32,
         position: Point,
+        baseline: Baseline,
         _target: &mut D,
     ) -> Result<Point, D::Error>
     where
         D: DrawTarget<Color = Self::Color>,
     {
+        // TODO: handle baseline
+
         Ok(position + Size::new(width, 0))
     }
 
-    fn measure_string(&self, text: &str, position: Point) -> TextMetrics {
-        // TODO: handle missing glyphs the same way as `draw_string` does
+    fn measure_string(&self, text: &str, position: Point, baseline: Baseline) -> TextMetrics {
+        // TODO: handle baseline
         let dx = text
             .chars()
-            .filter_map(|c| self.font.get_glyph(c))
-            .map(|glyph| glyph.device_width)
+            .map(|c| self.font.get_glyph(c).device_width)
             .sum();
 
         // TODO: calculate bounding box
@@ -92,13 +98,7 @@ where
         }
     }
 
-    fn vertical_offset(&self, position: Point, _vertical_alignment: VerticalAlignment) -> Point {
-        // TODO: support other alignments
-        position
-    }
-
     fn line_height(&self) -> u32 {
-        // TODO: read line height from BDF file
-        11
+        self.font.line_height
     }
 }
