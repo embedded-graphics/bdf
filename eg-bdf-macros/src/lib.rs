@@ -178,11 +178,11 @@ pub fn include_bdf(input: TokenStream) -> TokenStream {
                 continue;
             }
 
-            if c == std::char::REPLACEMENT_CHARACTER {
+            if c == std::char::REPLACEMENT_CHARACTER
+                || (c == ' ' && replacement_character.is_none())
+            {
                 replacement_character = Some(glyphs.len());
-            } else if c == ' ' && replacement_character == None {
-                replacement_character = Some(glyphs.len());
-            } 
+            }
 
             let (glyph_data, literal) = glyph_literal(glyph, data.len());
             glyphs.push(literal);

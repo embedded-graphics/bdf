@@ -50,7 +50,7 @@ where
         &self,
         text: &str,
         mut position: Point,
-        baseline: Baseline,
+        _baseline: Baseline,
         target: &mut D,
     ) -> Result<Point, D::Error>
     where
@@ -73,7 +73,7 @@ where
         &self,
         width: u32,
         position: Point,
-        baseline: Baseline,
+        _baseline: Baseline,
         _target: &mut D,
     ) -> Result<Point, D::Error>
     where
@@ -84,7 +84,7 @@ where
         Ok(position + Size::new(width, 0))
     }
 
-    fn measure_string(&self, text: &str, position: Point, baseline: Baseline) -> TextMetrics {
+    fn measure_string(&self, text: &str, position: Point, _baseline: Baseline) -> TextMetrics {
         // TODO: handle baseline
         let dx = text
             .chars()
