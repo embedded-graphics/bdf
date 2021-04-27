@@ -12,15 +12,15 @@ pub use eg_bdf_macros::include_bdf;
 pub mod text;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BdfFont<'a, 'b> {
+pub struct BdfFont<'a> {
     pub replacement_character: usize,
     pub line_height: u32,
     pub glyphs: &'a [BdfGlyph],
-    pub data: &'b [u8],
+    pub data: &'a [u8],
 }
 
-impl BdfFont<'_, '_> {
-    fn get_glyph(&self, c: char) -> &BdfGlyph {
+impl<'a> BdfFont<'a> {
+    fn get_glyph(&self, c: char) -> &'a BdfGlyph {
         self.glyphs
             .iter()
             .find(|g| g.character == c)

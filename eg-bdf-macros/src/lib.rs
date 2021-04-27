@@ -131,8 +131,6 @@ fn glyph_literal(glyph: &Glyph, start_index: usize) -> (Vec<bool>, proc_macro2::
     // TODO: check for negative values
     let device_width = glyph.device_width.x as u32;
 
-    // let bitmap = &glyph.bitmap;
-    // let data = quote! { &[ #( #bitmap ),* ] };
     let mut data = Vec::new();
 
     for y in 0..usize::try_from(glyph.bounding_box.size.y).unwrap() {
