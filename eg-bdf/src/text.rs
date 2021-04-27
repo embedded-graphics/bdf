@@ -10,24 +10,18 @@ use embedded_graphics::{
 use crate::BdfFont;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BdfTextStyle<'a, 'b, 'c, C> {
-    font: &'a BdfFont<'b, 'c>,
+pub struct BdfTextStyle<'a, C> {
+    font: &'a BdfFont<'a>,
     color: C,
 }
 
-impl<'a, 'b, 'c, C> BdfTextStyle<'a, 'b, 'c, C>
-where
-    C: PixelColor,
-{
-    pub fn new(font: &'a BdfFont<'b, 'c>, color: C) -> Self {
+impl<'a, C: PixelColor> BdfTextStyle<'a, C> {
+    pub fn new(font: &'a BdfFont<'a>, color: C) -> Self {
         Self { font, color }
     }
 }
 
-impl<'a, 'b, 'c, C> CharacterStyle for BdfTextStyle<'a, 'b, 'c, C>
-where
-    C: PixelColor,
-{
+impl<C: PixelColor> CharacterStyle for BdfTextStyle<'_, C> {
     type Color = C;
 
     fn set_text_color(&mut self, text_color: Option<Self::Color>) {
@@ -40,10 +34,7 @@ where
     // TODO: implement additional methods
 }
 
-impl<'a, 'b, 'c, C> TextRenderer for BdfTextStyle<'a, 'b, 'c, C>
-where
-    C: PixelColor,
-{
+impl<C: PixelColor> TextRenderer for BdfTextStyle<'_, C> {
     type Color = C;
 
     fn draw_string<D>(
