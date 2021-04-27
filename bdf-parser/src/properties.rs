@@ -228,7 +228,7 @@ impl PropertyValue {
     }
 
     fn parse_int(input: &[u8]) -> IResult<&[u8], PropertyValue> {
-        map(parse_to_i32, |i| PropertyValue::Int(i))(input)
+        map(parse_to_i32, PropertyValue::Int)(input)
     }
 }
 

@@ -92,10 +92,9 @@ fn parse_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
 }
 
 fn parse_hex_byte(input: &[u8]) -> IResult<&[u8], u8> {
-    map_res(
-        map_res(take(2usize), |bytes| std::str::from_utf8(bytes)),
-        |v| u8::from_str_radix(v, 16),
-    )(input)
+    map_res(map_res(take(2usize), std::str::from_utf8), |v| {
+        u8::from_str_radix(v, 16)
+    })(input)
 }
 
 /// Glyphs collection.
