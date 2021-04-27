@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Ralf Fuest <mail@rfuest.de>"]
 edition = "2018"
 
-[dev-dependencies]
+[dependencies]
 bdf-parser = { path = "../../bdf-parser" }
+clap = "3.0.0-beta.2"

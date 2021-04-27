@@ -1,8 +1,6 @@
-mod helpers;
-
 use std::path::Path;
 
-use helpers::*;
+use test_bdf_parser::*;
 
 #[test]
 fn it_parses_all_tecate_fonts() {
