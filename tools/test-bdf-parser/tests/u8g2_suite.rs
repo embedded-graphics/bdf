@@ -1,8 +1,6 @@
 use std::{path::Path, ffi::OsStr};
 
-mod helpers;
-
-use helpers::*;
+use test_bdf_parser::*;
 
 #[test]
 fn it_parses_all_u8g2_fonts() {
