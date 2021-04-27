@@ -1,6 +1,11 @@
 #![no_std]
 
-use embedded_graphics::{prelude::*, primitives::Rectangle};
+use embedded_graphics::{
+    iterator::raw::RawDataSlice,
+    pixelcolor::raw::{LittleEndian, RawU1},
+    prelude::*,
+    primitives::Rectangle,
+};
 
 pub use eg_bdf_macros::include_bdf;
 
@@ -8,46 +13,49 @@ pub mod text;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfFont<'a, 'b> {
-    pub glyphs: &'a [BdfGlyph<'b>],
+    pub replacement_character: usize,
+    pub line_height: u32,
+    pub glyphs: &'a [BdfGlyph],
+    pub data: &'b [u8],
 }
 
 impl BdfFont<'_, '_> {
-    fn get_glyph(&self, c: char) -> Option<&BdfGlyph> {
-        self.glyphs.iter().find(|g| g.character == c)
+    fn get_glyph(&self, c: char) -> &BdfGlyph {
+        self.glyphs
+            .iter()
+            .find(|g| g.character == c)
+            .unwrap_or_else(|| &self.glyphs[self.replacement_character])
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BdfGlyph<'a> {
+pub struct BdfGlyph {
     pub character: char,
     pub bounding_box: Rectangle,
     pub device_width: u32,
-    pub data: &'a [u8],
+    pub start_index: usize,
 }
 
-impl BdfGlyph<'_> {
-    fn draw<D>(&self, mut position: Point, color: D::Color, target: &mut D) -> Result<(), D::Error>
-    where
-        D: DrawTarget,
-    {
-        let bytes_per_row = (self.bounding_box.size.width as usize + 7) / 8;
+impl BdfGlyph {
+    fn draw<D: DrawTarget>(
+        &self,
+        position: Point,
+        color: D::Color,
+        data: &[u8],
+        target: &mut D,
+    ) -> Result<(), D::Error> {
+        let mut data_iter = RawDataSlice::<RawU1, LittleEndian>::new(data).into_iter();
 
-        position += self.bounding_box.top_left;
-
-        for dy in 0..self.bounding_box.size.height {
-            for dx in 0..self.bounding_box.size.width {
-                let byte_index = dy as usize * bytes_per_row + dx as usize / 8;
-
-                let byte = self.data[byte_index];
-                let mask = 0x80 >> dx % 8;
-
-                if byte & mask != 0 {
-                    let point = Point::new(dx as i32, dy as i32) + position;
-                    Pixel(point, color).draw(target)?;
-                }
-            }
+        if self.start_index > 0 {
+            data_iter.nth(self.start_index - 1);
         }
 
-        Ok(())
+        self.bounding_box
+            .translate(position)
+            .points()
+            .zip(data_iter)
+            .filter(|(_p, c)| *c == RawU1::new(1))
+            .map(|(p, _c)| Pixel(p, color))
+            .draw(target)
     }
 }

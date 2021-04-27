@@ -1,9 +1,9 @@
-use bdf_parser::{BdfFont, BoundingBox, Glyph};
+use bdf_parser::{BdfFont, BoundingBox, Glyph, Property};
 use embedded_graphics::{prelude::*, primitives::Rectangle};
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use std::{fs, path::PathBuf};
+use std::{convert::TryFrom, fs, path::PathBuf};
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
@@ -121,8 +121,8 @@ fn rectangle_constructor(rectangle: &Rectangle) -> proc_macro2::TokenStream {
     }
 }
 
-fn glyph_literal(glyph: &Glyph) -> Option<proc_macro2::TokenStream> {
-    let character = LitChar::new(glyph.encoding?, Span::call_site());
+fn glyph_literal(glyph: &Glyph, start_index: usize) -> (Vec<bool>, proc_macro2::TokenStream) {
+    let character = LitChar::new(glyph.encoding.unwrap(), Span::call_site());
 
     let rectangle = bounding_box_to_rectangle(&glyph.bounding_box);
     let bounding_box = rectangle_constructor(&rectangle);
@@ -131,17 +131,27 @@ fn glyph_literal(glyph: &Glyph) -> Option<proc_macro2::TokenStream> {
     // TODO: check for negative values
     let device_width = glyph.device_width.x as u32;
 
-    let bitmap = &glyph.bitmap;
-    let data = quote! { &[ #( #bitmap ),* ] };
+    // let bitmap = &glyph.bitmap;
+    // let data = quote! { &[ #( #bitmap ),* ] };
+    let mut data = Vec::new();
 
-    Some(quote! {
-        ::eg_bdf::BdfGlyph {
-            character: #character,
-            bounding_box: #bounding_box,
-            device_width: #device_width,
-            data: #data,
+    for y in 0..usize::try_from(glyph.bounding_box.size.y).unwrap() {
+        for x in 0..usize::try_from(glyph.bounding_box.size.x).unwrap() {
+            data.push(glyph.pixel(x, y))
         }
-    })
+    }
+
+    (
+        data,
+        quote! {
+            ::eg_bdf::BdfGlyph {
+                character: #character,
+                bounding_box: #bounding_box,
+                device_width: #device_width,
+                start_index: #start_index,
+            }
+        },
+    )
 }
 
 #[proc_macro]
@@ -157,19 +167,83 @@ pub fn include_bdf(input: TokenStream) -> TokenStream {
 
     let font = BdfFont::parse(&bdf).unwrap();
 
+    let mut data = Vec::new();
+    let mut glyphs = Vec::new();
+    let mut replacement_character = None;
+
     //TODO: sort glyphs to make it possible to use binary search
-    let glyphs: Vec<_> = font
-        .glyphs
-        .iter()
-        .filter(|glyph| glyph.encoding.map(|c| input.contains(c)).unwrap_or(false))
-        .filter_map(glyph_literal)
-        .collect();
+    for glyph in font.glyphs.iter() {
+        if let Some(c) = glyph.encoding {
+            if !input.contains(c) {
+                continue;
+            }
+
+            if c == std::char::REPLACEMENT_CHARACTER
+                || (c == ' ' && replacement_character.is_none())
+            {
+                replacement_character = Some(glyphs.len());
+            }
+
+            let (glyph_data, literal) = glyph_literal(glyph, data.len());
+            glyphs.push(literal);
+            data.extend_from_slice(&glyph_data);
+        }
+    }
+
+    // TODO: try to use DEFAULT_CHAR
+    let replacement_character = replacement_character.unwrap_or_default();
+
+    let data = bits_to_bytes(&data);
+
+    // TODO: report error or calculate fallback value
+    let line_height = font.properties.try_get::<i32>(Property::PixelSize).unwrap() as u32;
 
     let output = quote! {
         ::eg_bdf::BdfFont {
-            glyphs: &[ #( #glyphs ),* ]
+            glyphs: &[ #( #glyphs ),* ],
+            data: &[ #( #data ),* ],
+            line_height: #line_height,
+            replacement_character: #replacement_character,
         }
     };
 
     output.into()
+}
+
+fn bits_to_bytes(bits: &[bool]) -> Vec<u8> {
+    bits.chunks(8)
+        .map(|bits| {
+            bits.iter()
+                .enumerate()
+                .filter(|(_, b)| **b)
+                .map(|(i, _)| 0x80 >> i)
+                .sum()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bits_to_bytes() {
+        let f = false;
+        let t = true;
+
+        assert_eq!(bits_to_bytes(&[f, f, f, f, f, f, f, f]), vec![0x00]);
+        assert_eq!(bits_to_bytes(&[t, f, f, f, f, f, f, f]), vec![0x80]);
+        assert_eq!(bits_to_bytes(&[t, f, f, f, f, f, f, t]), vec![0x81]);
+    }
+
+    #[test]
+    fn test_bits_to_bytes_incomplete_byte() {
+        let f = false;
+        let t = true;
+
+        assert_eq!(
+            bits_to_bytes(&[f, f, f, f, f, f, f, f, t]),
+            vec![0x00, 0x80]
+        );
+    }
 }
