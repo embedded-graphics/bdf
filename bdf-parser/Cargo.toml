@@ -2,7 +2,7 @@
 name = "bdf-parser"
 description = "BDF font parser"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 authors = ["James Waples <james@wapl.es>", "Ralf Fuest <mail@rfuest.de>"]
 repository = "https://github.com/embedded-graphics/bdf"
 categories = ["parser-implementations"]
@@ -10,10 +10,10 @@ keywords = ["parser", "bdf", "font", "nom"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-bstr = "1.5.0"
+bstr = "1.7.0"
 nom = "7.1.3"
-strum = { version = "0.24.1", features = ["derive"] }
-thiserror = "1.0.24"
+strum = { version = "0.25.0", features = ["derive"] }
+thiserror = "1.0.49"
 
 [dev-dependencies]
-indoc = "2.0.1"
+indoc = "2.0.4"
