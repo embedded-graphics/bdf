@@ -52,7 +52,7 @@ impl<C: PixelColor> TextRenderer for BdfTextStyle<'_, C> {
         for c in text.chars() {
             let glyph = self.font.get_glyph(c);
 
-            glyph.draw(position, self.color, &self.font.data, target)?;
+            glyph.draw(position, self.color, self.font.data, target)?;
 
             position.x += glyph.device_width as i32;
         }

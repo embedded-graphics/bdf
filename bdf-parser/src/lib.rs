@@ -143,7 +143,7 @@ mod tests {
     use super::*;
     use indoc::indoc;
 
-    const FONT: &'static str = indoc! {r#"
+    const FONT: &str = indoc! {r#"
         STARTFONT 2.1
         FONT "test font"
         SIZE 16 75 75
