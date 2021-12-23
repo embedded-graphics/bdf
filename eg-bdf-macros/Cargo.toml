@@ -17,4 +17,4 @@ bdf-parser = { version= "0.1.0", path = "../bdf-parser" }
 syn = "1.0"
 quote = "1.0"
 proc-macro2 = "1.0"
-embedded-graphics = "0.7.0-beta.1"
+embedded-graphics = "0.7.1"

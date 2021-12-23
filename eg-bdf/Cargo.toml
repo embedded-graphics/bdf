@@ -10,8 +10,8 @@ categories = ["embedded", "no-std"]
 keywords = ["embedded-graphics", "font", "bdf"]
 
 [dependencies]
-embedded-graphics = "0.7.0-beta.1"
+embedded-graphics = "0.7.1"
 eg-bdf-macros = { version = "0.1.0", path = "../eg-bdf-macros" }
 
 [dev-dependencies]
-embedded-graphics-simulator = "0.3.0-beta.1"
+embedded-graphics-simulator = "0.3.0"
