@@ -1,9 +1,9 @@
-use clap::Clap;
+use clap::Parser;
 use std::path::PathBuf;
 
 use test_bdf_parser::*;
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Arguments {
     file_or_directory: PathBuf,
 }

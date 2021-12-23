@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 bdf-parser = { path = "../../bdf-parser" }
-clap = "3.0.0-beta.2"
+clap = { version = "3.0.0-rc.7", features = [ "derive" ] }
