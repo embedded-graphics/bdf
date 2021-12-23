@@ -214,7 +214,7 @@ mod tests {
     fn parse_single_char() {
         let (chardata, expected_glyph) = test_data();
 
-        assert_parser_ok!(Glyph::parse(chardata), expected_glyph.clone());
+        assert_parser_ok!(Glyph::parse(chardata), expected_glyph);
     }
 
     #[test]
