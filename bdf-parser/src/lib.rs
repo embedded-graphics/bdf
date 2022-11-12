@@ -1,28 +1,20 @@
 //! BDF parser.
 
+#![warn(missing_docs)]
 #![deny(unsafe_code)]
 #![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
-
-use nom::{
-    bytes::complete::tag,
-    character::complete::{multispace0, space1},
-    combinator::{eof, map, opt},
-    sequence::separated_pair,
-    IResult,
-};
-
-#[macro_use]
-mod helpers;
 
 mod glyph;
 mod metadata;
+mod parser;
 mod properties;
 
 pub use glyph::{Encoding, Glyph, Glyphs};
-use helpers::*;
-pub use metadata::Metadata;
-pub use properties::{Properties, Property, PropertyError};
+pub use metadata::{Metadata, MetricsSet};
+pub use parser::ParserError;
+pub use properties::{Properties, Property, PropertyError, PropertyType};
+
+use crate::parser::{Line, Lines};
 
 /// BDF Font.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,46 +24,29 @@ pub struct BdfFont {
 
     /// Glyphs.
     pub glyphs: Glyphs,
-
-    /// Properties.
-    pub properties: Properties,
 }
 
 impl BdfFont {
     /// Parses a BDF file.
-    ///
-    /// BDF files are expected to be ASCII encoded according to the BDF specification. Any non
-    /// ASCII characters in strings will be replaced by the `U+FFFD` replacement character.
-    pub fn parse(input: &[u8]) -> Result<Self, ParserError> {
-        let input = skip_whitespace(input);
-        let (input, metadata) = Metadata::parse(input).map_err(|_| ParserError::Metadata)?;
-        let input = skip_whitespace(input);
-        let (input, properties) = Properties::parse(input).map_err(|_| ParserError::Properties)?;
-        let input = skip_whitespace(input);
-        let (input, glyphs) = Glyphs::parse(input).map_err(|_| ParserError::Glyphs)?;
-        let input = skip_whitespace(input);
-        let (input, _) = end_font(input).unwrap();
-        let input = skip_whitespace(input);
-        end_of_file(input).map_err(|_| ParserError::EndOfFile)?;
+    pub fn parse(input: &str) -> Result<Self, ParserError> {
+        let mut lines = Lines::new(input);
 
-        Ok(Self {
-            properties,
-            metadata,
-            glyphs,
-        })
+        let first_line = lines
+            .next()
+            .ok_or_else(|| ParserError::new("empty input"))?;
+
+        if first_line.keyword != "STARTFONT" || first_line.parameters != "2.1" {
+            return Err(ParserError::with_line(
+                "expected \"STARTFONT 2.1\"",
+                &first_line,
+            ));
+        }
+
+        let metadata = Metadata::parse(&mut lines)?;
+        let glyphs = Glyphs::parse(&mut lines)?;
+
+        Ok(BdfFont { metadata, glyphs })
     }
-}
-
-fn skip_whitespace(input: &[u8]) -> &[u8] {
-    multispace0::<_, nom::error::Error<_>>(input).unwrap().0
-}
-
-fn end_font(input: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
-    opt(tag("ENDFONT"))(input)
-}
-
-fn end_of_file(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    eof(input)
 }
 
 /// Bounding box.
@@ -85,11 +60,13 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        map(
-            separated_pair(Coord::parse, space1, Coord::parse),
-            |(size, offset)| Self { size, offset },
-        )(input)
+    pub(crate) fn parse(line: &Line<'_>) -> Option<Self> {
+        let [size_x, size_y, offset_x, offset_y] = line.parse_integer_parameters()?;
+
+        Some(Self {
+            offset: Coord::new(offset_x, offset_y),
+            size: Coord::new(size_x, size_y),
+        })
     }
 
     fn upper_right(&self) -> Coord {
@@ -149,39 +126,30 @@ impl Coord {
         Self { x, y }
     }
 
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        map(
-            separated_pair(parse_to_i32, space1, parse_to_i32),
-            |(x, y)| Self::new(x, y),
-        )(input)
+    pub(crate) fn parse(line: &Line<'_>) -> Option<Self> {
+        let [x, y] = line.parse_integer_parameters()?;
+
+        Some(Self { x, y })
     }
-}
-
-/// Parser error.
-#[derive(Debug, PartialEq, thiserror::Error)]
-pub enum ParserError {
-    /// Metadata.
-    #[error("couldn't parse metadata")]
-    Metadata,
-
-    /// Properties.
-    #[error("couldn't parse properties")]
-    Properties,
-
-    /// Glyphs.
-    #[error("couldn't parse glyphs")]
-    Glyphs,
-
-    /// Unexpected input at the end of the file.
-    #[error("unexpected input at the end of the file")]
-    EndOfFile,
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::properties::PropertyValue;
+
     use super::*;
     use indoc::indoc;
 
+    #[track_caller]
+    pub(crate) fn assert_parser_error(input: &str, message: &str, line_number: Option<usize>) {
+        assert_eq!(
+            BdfFont::parse(input),
+            Err(ParserError {
+                message: message.to_string(),
+                line_number,
+            })
+        );
+    }
     const FONT: &str = indoc! {r#"
         STARTFONT 2.1
         FONT "test font"
@@ -193,6 +161,7 @@ mod tests {
         COMMENT comment
         FONT_DESCENT 2
         ENDPROPERTIES
+        CHARS 2
         STARTCHAR Char 0
         ENCODING 64
         DWIDTH 8 0
@@ -216,7 +185,6 @@ mod tests {
         assert_eq!(
             font.metadata,
             Metadata {
-                version: 2.1,
                 name: String::from("\"test font\""),
                 point_size: 16,
                 resolution: Coord::new(75, 75),
@@ -224,6 +192,19 @@ mod tests {
                     size: Coord::new(16, 24),
                     offset: Coord::new(0, 0),
                 },
+                metrics_set: MetricsSet::Horizontal,
+                properties: Properties::new(
+                    [
+                        (
+                            "COPYRIGHT".to_string(),
+                            PropertyValue::Text("Copyright123".to_string()),
+                        ),
+                        ("FONT_ASCENT".to_string(), PropertyValue::Int(1)),
+                        ("FONT_DESCENT".to_string(), PropertyValue::Int(2)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                )
             }
         );
 
@@ -254,18 +235,11 @@ mod tests {
                 },
             ],
         );
-
-        assert_eq!(
-            font.properties.try_get(Property::Copyright),
-            Ok("Copyright123".to_string())
-        );
-        assert_eq!(font.properties.try_get(Property::FontAscent), Ok(1));
-        assert_eq!(font.properties.try_get(Property::FontDescent), Ok(2));
     }
 
     #[test]
     fn parse_font() {
-        test_font(&BdfFont::parse(FONT.as_bytes()).unwrap())
+        test_font(&BdfFont::parse(FONT).unwrap())
     }
 
     #[test]
@@ -276,7 +250,18 @@ mod tests {
             .collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(input.as_bytes()).unwrap());
+        test_font(&BdfFont::parse(&input).unwrap());
+    }
+
+    #[test]
+    fn parse_font_without_chars() {
+        let lines: Vec<_> = FONT
+            .lines()
+            .filter(|line| !line.contains("CHARS"))
+            .collect();
+        let input = lines.join("\n");
+
+        test_font(&BdfFont::parse(&input).unwrap());
     }
 
     #[test]
@@ -284,25 +269,22 @@ mod tests {
         let lines: Vec<_> = FONT.lines().collect();
         let input = lines.join("\r\n");
 
-        test_font(&BdfFont::parse(input.as_bytes()).unwrap());
+        test_font(&BdfFont::parse(&input).unwrap());
     }
 
     #[test]
+    fn parse_empty_font() {
+        assert_parser_error("", "empty input", None);
+    }
+
+    // TODO: Should it be OK to have garbage after ENDFONT?
+    #[test]
+    #[ignore]
     fn parse_font_with_garbage_after_endfont() {
         let lines: Vec<_> = FONT.lines().chain(std::iter::once("Invalid")).collect();
         let input = lines.join("\n");
 
-        assert_eq!(
-            BdfFont::parse(input.as_bytes()),
-            Err(ParserError::EndOfFile)
-        );
-    }
-
-    const fn bb(offset_x: i32, offset_y: i32, size_x: i32, size_y: i32) -> BoundingBox {
-        BoundingBox {
-            offset: Coord::new(offset_x, offset_y),
-            size: Coord::new(size_x, size_y),
-        }
+        assert_parser_error(&input, "expected end of input", Some(28));
     }
 
     #[test]
@@ -310,7 +292,26 @@ mod tests {
         let lines: Vec<_> = std::iter::once("").chain(FONT.lines()).collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(input.as_bytes()).unwrap());
+        test_font(&BdfFont::parse(&input).unwrap());
+    }
+
+    #[test]
+    fn invalid_first_line() {
+        let input = "\nSOMETHING 2.1";
+        assert_parser_error(input, "expected \"STARTFONT 2.1\"", Some(2));
+    }
+
+    #[test]
+    fn missing_font_name() {
+        let input = "STARTFONT 2.1\n";
+        assert_parser_error(input, "missing \"FONT\"", None);
+    }
+
+    const fn bb(offset_x: i32, offset_y: i32, size_x: i32, size_y: i32) -> BoundingBox {
+        BoundingBox {
+            offset: Coord::new(offset_x, offset_y),
+            size: Coord::new(size_x, size_y),
+        }
     }
 
     #[test]

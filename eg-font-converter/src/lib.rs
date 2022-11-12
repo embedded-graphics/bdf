@@ -19,7 +19,7 @@
 //!
 //! let out_dir = std::env::var_os("OUT_DIR").unwrap();
 //!
-//! let font_6x10 = FontConverter::new("examples/6x10.bdf", "FONT_6X10_AZ")
+//! let font_6x10 = FontConverter::with_file("examples/6x10.bdf", "FONT_6X10_AZ")
 //!     .glyphs('A'..='Z')
 //!     .convert_mono_font()
 //!     .unwrap();
@@ -90,15 +90,15 @@ pub use eg_bdf_font::EgBdfOutput;
 pub use mono_font::MonoFontOutput;
 
 #[derive(Debug)]
-enum FileOrData<'a> {
+enum FileOrString<'a> {
     File(PathBuf),
-    Data(&'a [u8]),
+    String(&'a str),
 }
 
 /// Font converter.
 #[derive(Debug)]
 pub struct FontConverter<'a> {
-    bdf: FileOrData<'a>,
+    bdf: FileOrString<'a>,
     name: String,
     file_stem: String, //TODO: make configurable
     replacement_character: Option<char>,
@@ -114,16 +114,16 @@ pub struct FontConverter<'a> {
 
 impl<'a> FontConverter<'a> {
     /// Creates a font converter from a BDF file.
-    pub fn new<P: AsRef<Path>>(bdf_file: P, name: &str) -> Self {
-        Self::new_common(FileOrData::File(bdf_file.as_ref().to_owned()), name)
+    pub fn with_file<P: AsRef<Path>>(bdf_file: P, name: &str) -> Self {
+        Self::new(FileOrString::File(bdf_file.as_ref().to_owned()), name)
     }
 
     /// Creates a font converter from BDF data.
-    pub fn new_from_data(bdf_data: &'a [u8], name: &str) -> Self {
-        Self::new_common(FileOrData::Data(bdf_data), name)
+    pub fn with_string(bdf: &'a str, name: &str) -> Self {
+        Self::new(FileOrString::String(bdf), name)
     }
 
-    fn new_common(file_or_data: FileOrData<'a>, name: &str) -> Self {
+    fn new(file_or_data: FileOrString<'a>, name: &str) -> Self {
         Self {
             bdf: file_or_data,
             name: name.to_string(),
@@ -150,10 +150,10 @@ impl<'a> FontConverter<'a> {
     /// different argument types:
     ///
     /// ```
-    /// # let DATA = &[];
+    /// # let DATA = "";
     /// use eg_font_converter::FontConverter;
     ///
-    /// let converter = FontConverter::new_from_data(DATA, "FONT")
+    /// let converter = FontConverter::with_string(DATA, "FONT")
     ///     .glyphs('a')
     ///     .glyphs('b'..'c')
     ///     .glyphs('d'..='e')
@@ -165,10 +165,10 @@ impl<'a> FontConverter<'a> {
     /// encodings, ASCII or JIS X 0201:
     ///
     /// ```
-    /// # let DATA = &[];
+    /// # let DATA = "";
     /// use eg_font_converter::{FontConverter, Mapping};
     ///
-    /// let converter = FontConverter::new_from_data(DATA, "FONT")
+    /// let converter = FontConverter::with_string(DATA, "FONT")
     ///     .glyphs(Mapping::Iso8859_15);
     /// ```
     pub fn glyphs<G: GlyphRange>(mut self, glyphs: G) -> Self {
@@ -260,17 +260,16 @@ impl<'a> FontConverter<'a> {
         );
 
         let bdf = match &self.bdf {
-            FileOrData::File(file) => {
+            FileOrString::File(file) => {
                 let data = std::fs::read(file)
                     .with_context(|| format!("couldn't read BDF file from {file:?}"))?;
 
-                ParserBdfFont::parse(&data)
-                    .with_context(|| "couldn't parse BDF file".to_string())?
+                let str = String::from_utf8_lossy(&data);
+                ParserBdfFont::parse(&str)
             }
-            FileOrData::Data(data) => {
-                ParserBdfFont::parse(data).with_context(|| "couldn't parse BDF file".to_string())?
-            }
-        };
+            FileOrString::String(str) => ParserBdfFont::parse(str),
+        }
+        .with_context(|| "couldn't parse BDF file".to_string())?;
 
         let glyphs = if self.glyphs.is_empty() {
             bdf.glyphs.iter().cloned().collect()
@@ -308,6 +307,7 @@ impl<'a> FontConverter<'a> {
 
         // TODO: handle missing (incorrect?) properties
         let ascent = bdf
+            .metadata
             .properties
             .try_get::<i32>(Property::FontAscent)
             .ok()
@@ -315,6 +315,7 @@ impl<'a> FontConverter<'a> {
             .unwrap() as u32; //TODO: convert to error
 
         let descent = bdf
+            .metadata
             .properties
             .try_get::<i32>(Property::FontDescent)
             .ok()
@@ -537,7 +538,7 @@ impl Visibility {
 mod tests {
     use super::*;
 
-    const FONT: &[u8] = br#"
+    const FONT: &str = r#"
         STARTFONT 2.1
         FONT -gbdfed-Unknown-Medium-R-Normal--16-120-96-96-P-100-FontSpecific-0
         SIZE 8 96 96
@@ -554,8 +555,8 @@ mod tests {
         _GBDFED_INFO "Edited with gbdfed 1.6."
         ENDPROPERTIES
         CHARS 1
-        STARTCHAR char0
-        ENCODING 0
+        STARTCHAR A
+        ENCODING 65
         SWIDTH 750 0
         DWIDTH 8 0
         BBX 8 8 0 0
@@ -572,19 +573,17 @@ mod tests {
         ENDFONT
     "#;
 
-    #[ignore]
     #[test]
-    fn from_data() {
-        assert!(FontConverter::new_from_data(FONT, "TEST")
-            .glyphs('A'..='Z')
+    fn with_string() {
+        FontConverter::with_string(FONT, "TEST")
+            .glyphs('A'..='A')
             .convert()
-            .is_ok());
+            .unwrap();
     }
 
-    #[ignore]
     #[test]
     fn add_glyphs() {
-        let converter = FontConverter::new_from_data(FONT, "TEST")
+        let converter = FontConverter::with_string(FONT, "TEST")
             .glyphs('E')
             .glyphs('A'..='C')
             .glyphs('Y'..'Z')
@@ -599,9 +598,10 @@ mod tests {
 
     #[test]
     fn no_glyph_ranges() {
-        let converter = FontConverter::new_from_data(FONT, "TEST");
+        let converter = FontConverter::with_string(FONT, "TEST");
         let font = converter.convert().unwrap();
         assert_eq!(font.glyphs.len(), 1);
-        assert_eq!(font.glyphs[0].encoding, Encoding::Standard(0));
+        assert_eq!(font.glyphs[0].name, "A");
+        assert_eq!(font.glyphs[0].encoding, Encoding::Standard(65));
     }
 }

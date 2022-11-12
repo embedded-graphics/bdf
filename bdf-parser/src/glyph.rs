@@ -1,14 +1,9 @@
-use nom::{
-    bytes::complete::{tag, take, take_until},
-    character::complete::{multispace0, space0},
-    combinator::{eof, map, map_parser, map_res, opt},
-    multi::many0,
-    sequence::{delimited, preceded, terminated},
-    IResult,
-};
 use std::convert::TryFrom;
 
-use crate::{helpers::*, BoundingBox, Coord};
+use crate::{
+    parser::{Line, Lines},
+    BoundingBox, Coord, ParserError,
+};
 
 /// Glyph encoding
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,26 +39,101 @@ pub struct Glyph {
     pub bitmap: Vec<u8>,
 }
 
-impl Glyph {
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, name) = statement("STARTCHAR", parse_string)(input)?;
-        let (input, encoding) = statement("ENCODING", parse_encoding)(input)?;
-        let (input, scalable_width) = opt(statement("SWIDTH", Coord::parse))(input)?;
-        let (input, device_width) = statement("DWIDTH", Coord::parse)(input)?;
-        let (input, bounding_box) = statement("BBX", BoundingBox::parse)(input)?;
-        let (input, bitmap) = parse_bitmap(input)?;
+fn parse_bitmap_row(line: &Line<'_>, bitmap: &mut Vec<u8>) -> Result<(), ()> {
+    if !line.parameters.is_empty() || line.keyword.len() % 2 != 0 {
+        return Err(());
+    }
 
-        Ok((
-            input,
-            Self {
-                name,
-                encoding,
-                scalable_width,
-                device_width,
-                bounding_box,
-                bitmap,
-            },
-        ))
+    // Accessing the UTF-8 string by byte and not by char is OK because the
+    // hex conversion will fail for non ASCII inputs.
+    for hex in line.keyword.as_bytes().chunks_exact(2) {
+        let byte = str::from_utf8(hex)
+            .ok()
+            .and_then(|s| u8::from_str_radix(s, 16).ok())
+            .ok_or(())?;
+        bitmap.push(byte);
+    }
+
+    Ok(())
+}
+
+impl Glyph {
+    pub(crate) fn parse(mut lines: &mut Lines<'_>) -> Result<Self, crate::ParserError> {
+        let mut encoding = Encoding::Unspecified;
+        let mut scalable_width = None;
+        let mut device_width = Coord::new(0, 0);
+        let mut bounding_box = BoundingBox {
+            size: Coord::new(0, 0),
+            offset: Coord::new(0, 0),
+        };
+
+        let start = lines.next().unwrap();
+        assert_eq!(start.keyword, "STARTCHAR");
+        let name = start.parameters;
+
+        for line in &mut lines {
+            match line.keyword {
+                "ENCODING" => {
+                    encoding = if let Some([index1, index2]) = line.parse_integer_parameters() {
+                        if index1 >= 0 || index2 < 0 {
+                            return Err(ParserError::with_line("invalid \"ENCODING\"", &line));
+                        }
+
+                        Encoding::NonStandard(index2 as u32)
+                    } else if let Some([index]) = line.parse_integer_parameters() {
+                        if index >= 0 {
+                            Encoding::Standard(index as u32)
+                        } else {
+                            Encoding::Unspecified
+                        }
+                    } else {
+                        return Err(ParserError::with_line("invalid \"ENCODING\"", &line));
+                    };
+                }
+                "SWIDTH" => {
+                    scalable_width = Some(
+                        Coord::parse(&line)
+                            .ok_or_else(|| ParserError::with_line("invalid \"SWIDTH\"", &line))?,
+                    );
+                }
+                "DWIDTH" => {
+                    device_width = Coord::parse(&line)
+                        .ok_or_else(|| ParserError::with_line("invalid \"DWIDTH\"", &line))?;
+                }
+                "BBX" => {
+                    bounding_box = BoundingBox::parse(&line)
+                        .ok_or_else(|| ParserError::with_line("invalid \"BBX\"", &line))?;
+                }
+                "BITMAP" => {
+                    break;
+                }
+                _ => {
+                    return Err(ParserError::with_line(
+                        &format!("unknown keyword in glyphs: \"{}\"", line.keyword),
+                        &line,
+                    ))
+                }
+            }
+        }
+
+        let mut bitmap = Vec::new();
+        for line in &mut lines {
+            if line.keyword == "ENDCHAR" {
+                break;
+            }
+
+            parse_bitmap_row(&line, &mut bitmap)
+                .map_err(|_| ParserError::with_line("invalid hex data in BITMAP", &line))?;
+        }
+
+        Ok(Self {
+            name: name.to_string(),
+            encoding,
+            scalable_width,
+            device_width,
+            bounding_box,
+            bitmap,
+        })
     }
 
     /// Returns a pixel from the bitmap.
@@ -101,38 +171,6 @@ impl Glyph {
     }
 }
 
-fn parse_encoding(input: &[u8]) -> IResult<&[u8], Encoding> {
-    let (input, standard_encoding) = parse_to_i32(input)?;
-    let (input, non_standard_encoding) = opt(preceded(multispace0, parse_to_i32))(input)?;
-
-    let encoding = if standard_encoding >= 0 {
-        Encoding::Standard(u32::try_from(standard_encoding).unwrap())
-    } else if let Some(non_standard) = non_standard_encoding {
-        Encoding::NonStandard(u32::try_from(non_standard).unwrap())
-    } else {
-        Encoding::Unspecified
-    };
-
-    Ok((input, encoding))
-}
-
-fn parse_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
-    map_parser(
-        delimited(
-            statement("BITMAP", eof),
-            take_until("ENDCHAR"),
-            statement("ENDCHAR", eof),
-        ),
-        preceded(multispace0, many0(terminated(parse_hex_byte, multispace0))),
-    )(input)
-}
-
-fn parse_hex_byte(input: &[u8]) -> IResult<&[u8], u8> {
-    map_res(map_res(take(2usize), std::str::from_utf8), |v| {
-        u8::from_str_radix(v, 16)
-    })(input)
-}
-
 /// Glyphs collection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Glyphs {
@@ -140,19 +178,31 @@ pub struct Glyphs {
 }
 
 impl Glyphs {
-    pub(crate) fn new(mut glyphs: Vec<Glyph>) -> Self {
-        glyphs.sort_by_key(|glyph| glyph.encoding);
-        Self { glyphs }
-    }
+    pub(crate) fn parse(lines: &mut Lines<'_>) -> Result<Self, ParserError> {
+        let mut glyphs = Vec::new();
 
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        map(
-            preceded(
-                terminated(opt(numchars), multispace0),
-                many0(terminated(Glyph::parse, multispace0)),
-            ),
-            Self::new,
-        )(input)
+        while let Some(line) = lines.next() {
+            match line.keyword {
+                "CHARS" => {
+                    // TODO: handle
+                }
+                "STARTCHAR" => {
+                    lines.backtrack(line);
+                    glyphs.push(Glyph::parse(lines)?);
+                }
+                "ENDFONT" => {
+                    break;
+                }
+                _ => {
+                    return Err(ParserError::with_line(
+                        &format!("unknown keyword: \"{}\"", line.keyword),
+                        &line,
+                    ))
+                }
+            }
+        }
+
+        Ok(Self { glyphs })
     }
 
     /// Gets a glyph by the encoding.
@@ -176,50 +226,52 @@ impl Glyphs {
     }
 }
 
-fn numchars(input: &[u8]) -> IResult<&[u8], u32> {
-    preceded(
-        space0,
-        preceded(tag("CHARS"), preceded(space0, parse_to_u32)),
-    )(input)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use indoc::indoc;
 
+    #[track_caller]
+    fn parse_glyph(input: &str) -> Glyph {
+        let mut lines = Lines::new(input);
+        Glyph::parse(&mut lines).unwrap()
+    }
+
     #[test]
     fn test_parse_bitmap() {
-        assert_parser_ok!(parse_bitmap(b"BITMAP\n7e\nENDCHAR"), vec![0x7e]);
-        assert_parser_ok!(parse_bitmap(b"BITMAP\nff\nENDCHAR"), vec![0xff]);
-        assert_parser_ok!(parse_bitmap(b"BITMAP\nCCCC\nENDCHAR"), vec![0xcc, 0xcc]);
-        assert_parser_ok!(
-            parse_bitmap(b"BITMAP\nffffffff\nENDCHAR"),
-            vec![0xff, 0xff, 0xff, 0xff]
-        );
-        assert_parser_ok!(
-            parse_bitmap(b"BITMAP\nffffffff\naaaaaaaa\nENDCHAR"),
-            vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa]
-        );
-        assert_parser_ok!(
-            parse_bitmap(b"BITMAP\nff\nff\nff\nff\naa\naa\naa\naa\nENDCHAR"),
-            vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa]
-        );
-        assert_parser_ok!(
-            parse_bitmap(
-                b"BITMAP\n00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00\nENDCHAR"
+        let prefix = "STARTCHAR 0\nBITMAP\n";
+        let suffix = "\nENDCHAR";
+
+        for (input, expected) in [
+            ("7e", vec![0x7e]),
+            ("ff", vec![0xff]),
+            ("CCCC", vec![0xcc, 0xcc]),
+            ("ffffffff", vec![0xff, 0xff, 0xff, 0xff]),
+            (
+                "ffffffff\naaaaaaaa",
+                vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa],
             ),
-            vec![
-                0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42, 0x42,
-                0x00, 0x00
-            ]
-        );
+            (
+                "ff\nff\nff\nff\naa\naa\naa\naa",
+                vec![0xff, 0xff, 0xff, 0xff, 0xaa, 0xaa, 0xaa, 0xaa],
+            ),
+            (
+                "00\n00\n00\n00\n18\n24\n24\n42\n42\n7E\n42\n42\n42\n42\n00\n00",
+                vec![
+                    0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42,
+                    0x42, 0x00, 0x00,
+                ],
+            ),
+        ] {
+            let glyph = parse_glyph(&format!("{prefix}{input}{suffix}"));
+            assert_eq!(glyph.bitmap, expected);
+        }
     }
 
     /// Returns test data for a single glyph and the expected parsing result
-    fn test_data() -> (&'static [u8], Glyph) {
+    fn test_data() -> (&'static str, Glyph) {
         (
-            indoc! {br#"
+            indoc! {r#"
                 STARTCHAR ZZZZ
                 ENCODING 65
                 SWIDTH 500 0
@@ -264,24 +316,23 @@ mod tests {
     #[test]
     fn parse_single_char() {
         let (chardata, expected_glyph) = test_data();
-
-        assert_parser_ok!(Glyph::parse(chardata), expected_glyph);
+        assert_eq!(parse_glyph(chardata), expected_glyph);
     }
 
     #[test]
     fn get_glyph_by_char() {
         let (chardata, expected_glyph) = test_data();
 
-        let (input, glyphs) = Glyphs::parse(chardata).unwrap();
-        assert!(input.is_empty());
+        let mut lines = Lines::new(chardata);
+
+        let glyphs = Glyphs::parse(&mut lines).unwrap();
         assert_eq!(glyphs.get('A'), Some(&expected_glyph));
     }
 
     #[test]
     fn pixel_getter() {
         let (chardata, _) = test_data();
-        let (input, glyph) = Glyph::parse(chardata).unwrap();
-        assert!(input.is_empty());
+        let glyph = parse_glyph(chardata);
 
         let bitmap = (0..16)
             .map(|y| {
@@ -320,8 +371,7 @@ mod tests {
     #[test]
     fn pixels_iterator() {
         let (chardata, _) = test_data();
-        let (input, glyph) = Glyph::parse(chardata).unwrap();
-        assert!(input.is_empty());
+        let glyph = parse_glyph(chardata);
 
         let bitmap = glyph
             .pixels()
@@ -354,8 +404,7 @@ mod tests {
     #[test]
     fn pixel_getter_outside() {
         let (chardata, _) = test_data();
-        let (input, glyph) = Glyph::parse(chardata).unwrap();
-        assert!(input.is_empty());
+        let glyph = parse_glyph(chardata);
 
         assert_eq!(glyph.pixel(8, 0), None);
         assert_eq!(glyph.pixel(0, 16), None);
@@ -364,7 +413,7 @@ mod tests {
 
     #[test]
     fn parse_glyph_with_no_encoding() {
-        let chardata = indoc! {br#"
+        let chardata = indoc! {r#"
             STARTCHAR 000
             ENCODING -1
             SWIDTH 432 0
@@ -374,8 +423,8 @@ mod tests {
             ENDCHAR
         "#};
 
-        assert_parser_ok!(
-            Glyph::parse(chardata),
+        assert_eq!(
+            parse_glyph(chardata),
             Glyph {
                 bitmap: vec![],
                 bounding_box: BoundingBox {
@@ -392,7 +441,7 @@ mod tests {
 
     #[test]
     fn parse_glyph_with_no_encoding_and_index() {
-        let chardata = indoc! {br#"
+        let chardata = indoc! {r#"
             STARTCHAR 000
             ENCODING -1 123
             SWIDTH 432 0
@@ -402,8 +451,8 @@ mod tests {
             ENDCHAR
         "#};
 
-        assert_parser_ok!(
-            Glyph::parse(chardata),
+        assert_eq!(
+            parse_glyph(chardata),
             Glyph {
                 bitmap: vec![],
                 bounding_box: BoundingBox {
@@ -420,7 +469,7 @@ mod tests {
 
     #[test]
     fn parse_glyph_with_empty_bitmap() {
-        let chardata = indoc! {br#"
+        let chardata = indoc! {r#"
             STARTCHAR 000
             ENCODING 0
             SWIDTH 432 0
@@ -430,8 +479,8 @@ mod tests {
             ENDCHAR
         "#};
 
-        assert_parser_ok!(
-            Glyph::parse(chardata),
+        assert_eq!(
+            parse_glyph(chardata),
             Glyph {
                 bitmap: vec![],
                 bounding_box: BoundingBox {

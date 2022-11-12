@@ -8,23 +8,20 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # TODO: remove all path dependencies
-anyhow = "1.0.75"
+anyhow = "1.0.98"
 bdf-parser = { version = "0.1.0", path = "../bdf-parser" }
 eg-bdf = { path = "../eg-bdf" }
 embedded-graphics = "0.8.1"
-embedded-graphics-simulator = { version = "0.5.0", default-features = false }
-#heck = "0.4.0"
+embedded-graphics-simulator = { version = "0.7.0", default-features = false }
 bitvec = "1.0.1"
-
-
-syn = { version = "2.0.38", default-features = false, features = ["full", "parsing"] }
-prettyplease = "0.2.15"
-quote = "1.0.33"
+syn = { version = "2.0.104", default-features = false, features = ["full", "parsing"] }
+prettyplease = "0.2.35"
+quote = "1.0.40"
 
 
 # TODO: clap isn't required if eg-convert-font is used as a library:
 # https://github.com/rust-lang/cargo/issues/1982
-clap = { version = "4.4.6", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 
 [dev-dependencies]
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.1"

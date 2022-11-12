@@ -14,6 +14,8 @@ fn it_parses_all_u8g2_fonts() {
         .iter()
         // u8x8extra.bdf has a broken header
         .filter(|path| path.file_name() != Some(OsStr::new("u8x8extra.bdf")))
+        // emoticons21.bdf has an invalid COPYRIGHT property in line 7
+        .filter(|path| path.file_name() != Some(OsStr::new("emoticons21.bdf")))
         .map(|fpath| test_font_parse(fpath));
 
     let mut num_errors = 0;

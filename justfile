@@ -6,7 +6,6 @@ test:
     just test-parser
 
 test-parser: _clone-u8g2 _clone-bitmap-fonts
-    cargo test -p bdf-parser
     cd tools/test-bdf-parser; cargo test --release
 
 _clone-u8g2: (_clone-font-repo "u8g2" "https://github.com/olikraus/u8g2.git" u8g2_revision)

@@ -1,16 +1,7 @@
-use nom::{
-    branch::alt,
-    bytes::complete::{tag, take_until},
-    character::complete::{multispace0, space1},
-    combinator::{eof, map, map_opt, map_parser, opt},
-    multi::{many0, many1},
-    sequence::delimited,
-    IResult, ParseTo,
-};
 use std::{collections::HashMap, convert::TryFrom};
 use thiserror::Error;
 
-use crate::helpers::*;
+use crate::parser::{Lines, ParserError};
 
 /// BDF file property.
 ///
@@ -137,50 +128,63 @@ pub enum Property {
 }
 
 /// BDF file properties.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Properties {
     properties: HashMap<String, PropertyValue>,
 }
 
 impl Properties {
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        map(
-            opt(map_parser(
-                delimited(
-                    statement("STARTPROPERTIES", parse_to_u32),
-                    take_until("ENDPROPERTIES"),
-                    statement("ENDPROPERTIES", eof),
-                ),
-                many0(skip_comments(property)),
-            )),
-            |properties| {
-                // Convert vector of properties into a HashMap
-                let properties = properties
-                    .map(|p| p.iter().cloned().collect())
-                    .unwrap_or_default();
+    #[cfg(test)]
+    pub(crate) fn new(properties: HashMap<String, PropertyValue>) -> Self {
+        Self { properties }
+    }
 
-                Self { properties }
-            },
-        )(input)
+    pub(crate) fn parse(lines: &mut Lines<'_>) -> Result<Self, ParserError> {
+        let start = lines.next().unwrap();
+        assert_eq!(start.keyword, "STARTPROPERTIES");
+
+        // TODO: check if number of properties is correct
+        let _n_properties: usize = start
+            .parameters
+            .parse()
+            .map_err(|_| ParserError::with_line("invalid \"STARTPROPERTIES\"", &start))?;
+
+        let mut properties = HashMap::new();
+
+        for line in lines {
+            if line.keyword == "ENDPROPERTIES" {
+                break;
+            }
+
+            let value = if let Ok(int) = line.parameters.parse::<i32>() {
+                PropertyValue::Int(int)
+            } else if let Some(text) = line
+                .parameters
+                .strip_prefix('"')
+                .and_then(|p| p.strip_suffix('"'))
+            {
+                PropertyValue::Text(text.replace("\"\"", "\""))
+            } else {
+                return Err(ParserError::with_line("invalid property", &line));
+            };
+
+            properties.insert(line.keyword.to_string(), value);
+        }
+
+        Ok(Self { properties })
     }
 
     /// Tries to get a property.
     ///
     /// Returns an error if the property doesn't exist or the value has the wrong type.
-    pub fn try_get<T>(&self, property: Property) -> Result<T, PropertyError>
-    where
-        T: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
-    {
+    pub fn try_get<T: PropertyType>(&self, property: Property) -> Result<T, PropertyError> {
         self.try_get_by_name(&property.to_string())
     }
 
     /// Tries to get a property by name.
     ///
     /// Returns an error if the property doesn't exist or the value has the wrong type.
-    pub fn try_get_by_name<T>(&self, name: &str) -> Result<T, PropertyError>
-    where
-        T: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
-    {
+    pub fn try_get_by_name<T: PropertyType>(&self, name: &str) -> Result<T, PropertyError> {
         self.properties
             .get(name)
             .ok_or_else(|| PropertyError::Undefined(name.to_string()))
@@ -193,41 +197,20 @@ impl Properties {
     }
 }
 
-fn property(input: &[u8]) -> IResult<&[u8], (String, PropertyValue)> {
-    let (input, _) = multispace0(input)?;
-    let (input, key) = map_opt(take_until(" "), |s: &[u8]| s.parse_to())(input)?;
-    let (input, _) = space1(input)?;
-    let (input, value) = PropertyValue::parse(input)?;
-    let (input, _) = multispace0(input)?;
-
-    Ok((input, (key, value)))
+/// Marker trait for property value types.
+pub trait PropertyType
+where
+    Self: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
+{
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl PropertyType for String {}
+impl PropertyType for i32 {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyValue {
     Text(String),
     Int(i32),
-}
-
-impl PropertyValue {
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        alt((Self::parse_string, Self::parse_int))(input)
-    }
-
-    fn parse_string(input: &[u8]) -> IResult<&[u8], PropertyValue> {
-        map(
-            many1(delimited(
-                tag("\""),
-                map(take_until("\""), ascii_to_string_lossy),
-                tag("\""),
-            )),
-            |parts| PropertyValue::Text(parts.join("\"")),
-        )(input)
-    }
-
-    fn parse_int(input: &[u8]) -> IResult<&[u8], PropertyValue> {
-        map(parse_to_i32, PropertyValue::Int)(input)
-    }
 }
 
 impl TryFrom<&PropertyValue> for String {
@@ -269,113 +252,66 @@ mod tests {
     use indoc::indoc;
 
     #[test]
-    fn parse_property_with_whitespace() {
-        assert_parser_ok!(
-            property(b"KEY   \"VALUE\""),
-            ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
-        );
+    fn string_properties() {
+        const INPUT: &str = indoc! {r#"
+            STARTPROPERTIES 3
+            KEY1 "VALUE"
+            KEY2   "RANDOM WORDS AND STUFF"
+            WITH_QUOTE "1""23"""
+            ENDPROPERTIES
+        "#};
 
-        assert_parser_ok!(
-            property(b"KEY   \"RANDOM WORDS AND STUFF\""),
-            (
-                "KEY".to_string(),
-                PropertyValue::Text("RANDOM WORDS AND STUFF".to_string())
-            )
-        );
+        let mut lines = Lines::new(INPUT);
+        let properties = Properties::parse(&mut lines).unwrap();
+
+        for (key, expected) in [
+            ("KEY1", "VALUE"),
+            ("KEY2", "RANDOM WORDS AND STUFF"),
+            ("WITH_QUOTE", "1\"23\""),
+        ] {
+            assert_eq!(
+                properties.try_get_by_name::<String>(key).unwrap(),
+                expected.to_string(),
+                "key=\"{key}\""
+            );
+        }
     }
 
     #[test]
-    fn parse_string_property() {
-        assert_parser_ok!(
-            property(b"KEY \"VALUE\""),
-            ("KEY".to_string(), PropertyValue::Text("VALUE".to_string()))
-        );
+    fn integer_properties() {
+        const INPUT: &str = indoc! {r#"
+            STARTPROPERTIES 2
+            POS_INT 10
+            NEG_INT -20
+            ENDPROPERTIES
+        "#};
+
+        let mut lines = Lines::new(INPUT);
+        let properties = Properties::parse(&mut lines).unwrap();
+
+        for (key, expected) in [
+            ("POS_INT", 10), //
+            ("NEG_INT", -20),
+        ] {
+            assert_eq!(
+                properties.try_get_by_name::<i32>(key).unwrap(),
+                expected,
+                "key=\"{key}\""
+            );
+        }
     }
 
     #[test]
-    fn parse_string_property_with_quote_in_value() {
-        assert_parser_ok!(
-            property(br#"WITH_QUOTE "1""23""""#),
-            (
-                "WITH_QUOTE".to_string(),
-                PropertyValue::Text("1\"23\"".to_string())
-            )
-        );
-    }
-
-    #[test]
-    fn parse_string_property_with_invalid_ascii() {
-        assert_parser_ok!(
-            property(b"KEY \"VALUE\xAB\""),
-            (
-                "KEY".to_string(),
-                PropertyValue::Text("VALUE\u{FFFD}".to_string())
-            )
-        );
-    }
-
-    #[test]
-    fn parse_integer_property() {
-        assert_parser_ok!(
-            property(b"POSITIVE_NUMBER 10"),
-            ("POSITIVE_NUMBER".to_string(), PropertyValue::Int(10i32))
-        );
-
-        assert_parser_ok!(
-            property(b"NEGATIVE_NUMBER -10"),
-            ("NEGATIVE_NUMBER".to_string(), PropertyValue::Int(-10i32))
-        );
-    }
-
-    #[test]
-    fn parse_empty_property_list() {
-        let input = indoc! {br#"
+    fn empty_properties() {
+        const INPUT: &str = indoc! {r#"
             STARTPROPERTIES 0
             ENDPROPERTIES
         "#};
 
-        let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, b"");
-        assert!(properties.is_empty());
-    }
+        let mut lines = Lines::new(INPUT);
+        let properties = Properties::parse(&mut lines).unwrap();
 
-    #[test]
-    fn parse_properties() {
-        let input = indoc! {br#"
-            STARTPROPERTIES 2
-            TEXT "FONT"
-            INTEGER 10
-            ENDPROPERTIES
-        "#};
-
-        let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, b"");
-
-        assert_eq!(properties.properties.len(), 2);
-        assert_eq!(properties.try_get_by_name("TEXT"), Ok("FONT".to_string()));
-        assert_eq!(properties.try_get_by_name("INTEGER"), Ok(10));
-    }
-
-    #[test]
-    fn try_get() {
-        let input = indoc! {br#"
-            STARTPROPERTIES 2
-            FAMILY_NAME "FAMILY"
-            RESOLUTION_X 100
-            RESOLUTION_Y 75
-            ENDPROPERTIES
-        "#};
-
-        let (input, properties) = Properties::parse(input).unwrap();
-        assert_eq!(input, b"");
-
-        assert_eq!(properties.properties.len(), 3);
-        assert_eq!(
-            properties.try_get(Property::FamilyName),
-            Ok("FAMILY".to_string())
-        );
-        assert_eq!(properties.try_get(Property::ResolutionX), Ok(100));
-        assert_eq!(properties.try_get(Property::ResolutionY), Ok(75));
+        assert_eq!(properties.properties, HashMap::new());
     }
 
     #[test]

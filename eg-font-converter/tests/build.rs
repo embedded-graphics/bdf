@@ -36,7 +36,7 @@ fn assert_data(data: &[u8], expected: &[u8], width: u32) {
 
 #[test]
 fn eg_bdf_az() {
-    let font = FontConverter::new("../eg-bdf-examples/examples/6x10.bdf", "EG_BDF_AZ")
+    let font = FontConverter::with_file("../eg-bdf-examples/examples/6x10.bdf", "EG_BDF_AZ")
         .glyphs('a'..='z')
         .convert_eg_bdf()
         .unwrap();
@@ -46,7 +46,7 @@ fn eg_bdf_az() {
 
 #[test]
 fn mono_font_6x10_ascii() {
-    let font_6x10 = FontConverter::new(
+    let font_6x10 = FontConverter::with_file(
         "../eg-bdf-examples/examples/6x10.bdf",
         "MONO_FONT_6X10_ASCII",
     )
@@ -68,7 +68,7 @@ fn mono_font_6x10_ascii() {
 
 #[test]
 fn mono_font_10x20_iso8859_1() {
-    let font_10x20 = FontConverter::new(
+    let font_10x20 = FontConverter::with_file(
         "../eg-bdf-examples/examples/10x20.bdf",
         "MONO_FONT_10X20_ISO8859_1",
     )
@@ -90,7 +90,7 @@ fn mono_font_10x20_iso8859_1() {
 
 #[test]
 fn mono_font_10x20_iso8859_15() {
-    let font_10x20 = FontConverter::new(
+    let font_10x20 = FontConverter::with_file(
         "../eg-bdf-examples/examples/10x20.bdf",
         "MONO_FONT_10X20_ISO8859_15",
     )
@@ -112,11 +112,12 @@ fn mono_font_10x20_iso8859_15() {
 
 #[test]
 fn mono_font_6x10_az() {
-    let font_6x10 = FontConverter::new("../eg-bdf-examples/examples/6x10.bdf", "FONT_6X10_AZ")
-        .glyphs('a'..='z')
-        .comment("6x10 pixel monospace font.")
-        .convert_mono_font()
-        .unwrap();
+    let font_6x10 =
+        FontConverter::with_file("../eg-bdf-examples/examples/6x10.bdf", "FONT_6X10_AZ")
+            .glyphs('a'..='z')
+            .comment("6x10 pixel monospace font.")
+            .convert_mono_font()
+            .unwrap();
 
     assert_eq!(
         font_6x10.rust(),

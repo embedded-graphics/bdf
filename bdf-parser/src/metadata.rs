@@ -1,18 +1,31 @@
-use nom::{
-    character::complete::{multispace0, space1},
-    combinator::map_opt,
-    sequence::separated_pair,
-    IResult, ParseTo,
+use crate::{
+    parser::{Lines, ParserError},
+    BoundingBox, Coord, Properties,
 };
 
-use crate::{helpers::*, BoundingBox, Coord};
+/// Metrics set.
+///
+/// The metrics set specifies for which writing directions the font includes metrics.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum MetricsSet {
+    /// Horizontal writing direction.
+    ///
+    /// `METRICSSET 0`
+    #[default]
+    Horizontal,
+    /// Vertical writing direction.
+    ///
+    /// `METRICSSET 1`
+    Vertical,
+    /// Both writing directions.
+    ///
+    /// `METRICSSET 2`
+    Both,
+}
 
 /// BDF file metadata.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Metadata {
-    /// BDF format version.
-    pub version: f32,
-
     /// Font name.
     pub name: String,
 
@@ -24,83 +37,167 @@ pub struct Metadata {
 
     /// Font bounding box.
     pub bounding_box: BoundingBox,
+
+    /// Metrics set.
+    pub metrics_set: MetricsSet,
+
+    /// Properties.
+    pub properties: Properties,
 }
 
 impl Metadata {
-    pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        let (input, version) = skip_comments(metadata_version)(input)?;
-        let (input, name) = skip_comments(metadata_name)(input)?;
-        let (input, (point_size, resolution)) = skip_comments(metadata_size)(input)?;
-        let (input, bounding_box) = skip_comments(metadata_bounding_box)(input)?;
-        let (input, _) = multispace0(input)?;
+    pub(crate) fn parse<'a>(lines: &mut Lines<'a>) -> Result<Self, ParserError> {
+        let mut name = None;
+        let mut font_bounding_box = None;
+        let mut point_size = None;
+        let mut resolution = Coord::default();
+        let mut metrics_set = MetricsSet::default();
+        let mut properties = None;
 
-        Ok((
-            input,
-            Self {
-                version,
-                name,
-                point_size,
-                resolution,
-                bounding_box,
-            },
-        ))
+        while let Some(line) = lines.next() {
+            match line.keyword {
+                "FONT" => {
+                    name = Some(line.parameters.to_string());
+                }
+                "FONTBOUNDINGBOX" => {
+                    font_bounding_box = Some(BoundingBox::parse(&line).ok_or_else(|| {
+                        ParserError::with_line("invalid \"FONTBOUNDINGBOX\"", &line)
+                    })?);
+                }
+                "SIZE" => {
+                    let [point, x, y] = line
+                        .parse_integer_parameters()
+                        .ok_or_else(|| ParserError::with_line("invalid \"SIZE\"", &line))?;
+                    point_size = Some(point);
+                    resolution.x = x;
+                    resolution.y = y;
+                }
+                "METRICSSET" => {
+                    let [index] = line
+                        .parse_integer_parameters()
+                        .filter(|[index]| (0..=2).contains(index))
+                        .ok_or_else(|| ParserError::with_line("invalid \"METRICSSET\"", &line))?;
+
+                    metrics_set = match index {
+                        0 => MetricsSet::Horizontal,
+                        1 => MetricsSet::Vertical,
+                        2 => MetricsSet::Both,
+                        _ => unreachable!(),
+                    }
+                }
+                "STARTPROPERTIES" => {
+                    lines.backtrack(line);
+                    properties = Some(Properties::parse(lines)?);
+                }
+                "CHARS" | "STARTCHAR" => {
+                    lines.backtrack(line);
+                    break;
+                }
+                _ => {
+                    return Err(ParserError::with_line(
+                        &format!("unknown keyword in metadata: \"{}\"", line.keyword),
+                        &line,
+                    ))
+                }
+            }
+        }
+
+        if name.is_none() {
+            return Err(ParserError::new("missing \"FONT\""));
+        }
+        if font_bounding_box.is_none() {
+            return Err(ParserError::new("missing \"FONTBOUNDINGBOX\""));
+        }
+        if point_size.is_none() {
+            return Err(ParserError::new("missing \"SIZE\""));
+        }
+
+        Ok(Metadata {
+            name: name.unwrap(),
+            point_size: point_size.unwrap(),
+            resolution,
+            bounding_box: font_bounding_box.unwrap(),
+            metrics_set,
+            properties: properties.unwrap_or_default(),
+        })
     }
-}
-
-fn metadata_version(input: &[u8]) -> IResult<&[u8], f32> {
-    map_opt(statement("STARTFONT", parse_string), |v: String| {
-        v.as_str().parse_to()
-    })(input)
-}
-
-fn metadata_name(input: &[u8]) -> IResult<&[u8], String> {
-    statement("FONT", parse_string)(input)
-}
-
-fn metadata_size(input: &[u8]) -> IResult<&[u8], (i32, Coord)> {
-    statement("SIZE", separated_pair(parse_to_i32, space1, Coord::parse))(input)
-}
-
-fn metadata_bounding_box(input: &[u8]) -> IResult<&[u8], BoundingBox> {
-    statement("FONTBOUNDINGBOX", BoundingBox::parse)(input)
 }
 
 #[cfg(test)]
 mod tests {
+    use indoc::indoc;
+
     use super::*;
+    use crate::{tests::assert_parser_error, BdfFont};
 
     #[test]
-    fn parse_bdf_version() {
-        assert_parser_ok!(metadata_version(b"STARTFONT 2.1\n"), 2.1f32);
+    fn complete_metadata() {
+        const FONT: &str = indoc! {r#"
+            STARTFONT 2.1
+            FONT "test font"
+            FONTBOUNDINGBOX 0 1 2 3
+            SIZE 1 2 3
+            COMMENT "comment"
+            CHARS 0
+            ENDFONT
+        "#};
 
-        // Some fonts are a bit overzealous with their whitespace
-        assert_parser_ok!(metadata_version(b"STARTFONT   2.1\n"), 2.1f32);
+        BdfFont::parse(FONT).unwrap();
     }
 
     #[test]
-    fn parse_font_name() {
-        assert_parser_ok!(metadata_name(b"FONT abc"), "abc".to_string());
+    fn missing_name() {
+        const FONT: &str = indoc! {r#"
+            STARTFONT 2.1
+            FONTBOUNDINGBOX 0 1 2 3
+            SIZE 1 2 3
+            CHARS 0
+            ENDFONT
+        "#};
+
+        assert_parser_error(FONT, "missing \"FONT\"", None);
     }
 
     #[test]
-    fn parse_metadata() {
-        let input = br#"STARTFONT 2.1
-FONT "test font"
-SIZE 16 75 100
-FONTBOUNDINGBOX 16 24 1 2"#;
+    fn missing_fontboundingbox() {
+        const FONT: &str = indoc! {r#"
+            STARTFONT 2.1
+            FONT "test font"
+            SIZE 1 2 3
+            CHARS 0
+            ENDFONT
+        "#};
 
-        assert_parser_ok!(
-            Metadata::parse(input),
-            Metadata {
-                version: 2.1,
-                name: String::from("\"test font\""),
-                point_size: 16,
-                resolution: Coord::new(75, 100),
-                bounding_box: BoundingBox {
-                    size: Coord::new(16, 24),
-                    offset: Coord::new(1, 2),
-                }
-            }
-        );
+        assert_parser_error(FONT, "missing \"FONTBOUNDINGBOX\"", None);
+    }
+
+    #[test]
+    fn missing_size() {
+        const FONT: &str = indoc! {r#"
+            STARTFONT 2.1
+            FONT "test font"
+            FONTBOUNDINGBOX 0 1 2 3
+            CHARS 0
+            ENDFONT
+        "#};
+
+        assert_parser_error(FONT, "missing \"SIZE\"", None);
+    }
+
+    #[test]
+    fn metrics_set() {
+        const FONT: &str = indoc! {r#"
+            STARTFONT 2.1
+            FONT "test font"
+            FONTBOUNDINGBOX 0 1 2 3
+            SIZE 1 2 3
+            COMMENT "comment"
+            METRICSSET 2
+            CHARS 0
+            ENDFONT
+        "#};
+
+        let font = BdfFont::parse(FONT).unwrap();
+        assert_eq!(font.metadata.metrics_set, MetricsSet::Both);
     }
 }
