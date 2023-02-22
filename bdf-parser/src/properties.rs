@@ -216,14 +216,12 @@ impl PropertyValue {
 
     fn parse_string(input: &[u8]) -> IResult<&[u8], PropertyValue> {
         map(
-            many1(delimited(tag("\""), take_until("\""), tag("\""))),
-            |parts| {
-                let parts: Vec<_> = parts
-                    .iter()
-                    .map(|part| ascii_to_string_lossy(*part))
-                    .collect();
-                PropertyValue::Text(parts.join("\""))
-            },
+            many1(delimited(
+                tag("\""),
+                map(take_until("\""), ascii_to_string_lossy),
+                tag("\""),
+            )),
+            |parts| PropertyValue::Text(parts.join("\"")),
         )(input)
     }
 
