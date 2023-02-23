@@ -104,19 +104,26 @@ pub struct Glyphs {
 }
 
 impl Glyphs {
+    pub(crate) fn new(mut glyphs: Vec<Glyph>) -> Self {
+        glyphs.sort_by_key(|glyph| glyph.encoding);
+        Self { glyphs }
+    }
+
     pub(crate) fn parse(input: &[u8]) -> IResult<&[u8], Self> {
         map(
             preceded(
                 terminated(opt(numchars), multispace0),
                 many0(terminated(Glyph::parse, multispace0)),
             ),
-            |glyphs| Self { glyphs },
+            Self::new,
         )(input)
     }
 
     /// Gets a glyph by the encoding.
     pub fn get(&self, c: char) -> Option<&Glyph> {
-        self.glyphs.iter().find(|glyph| glyph.encoding == Some(c))
+        self.glyphs
+            .binary_search_by_key(&Some(c), |glyph| glyph.encoding)
+            .map_or(None, |i| Some(&self.glyphs[i]))
     }
 
     /// Returns an iterator over all glyphs.
