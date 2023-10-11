@@ -11,7 +11,7 @@ use std::convert::TryFrom;
 use crate::{helpers::*, BoundingBox, Coord};
 
 /// Glyph.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Glyph {
     /// Name.
     pub name: String,
@@ -60,17 +60,32 @@ impl Glyph {
     /// top left corner of the bounding box and don't take the offset into account. Y coordinates
     /// increase downwards.
     ///
-    /// # Panics
-    ///
-    /// This method panics if the coordinates are outside the bitmap.
-    pub fn pixel(&self, x: usize, y: usize) -> bool {
+    /// Returns `None` if the coordinates are outside the bitmap.
+    pub fn pixel(&self, x: usize, y: usize) -> Option<bool> {
         let width = usize::try_from(self.bounding_box.size.x).unwrap();
+
+        if x >= width {
+            return None;
+        }
 
         let bytes_per_row = (width + 7) / 8;
         let byte_offset = x / 8;
         let bit_mask = 0x80 >> (x % 8);
 
-        self.bitmap[byte_offset + bytes_per_row * y] & bit_mask != 0
+        self.bitmap
+            .get(byte_offset + bytes_per_row * y)
+            .map(|v| v & bit_mask != 0)
+    }
+
+    /// Returns an iterator over the pixels in the glyph bitmap.
+    ///
+    /// Iteration starts at the top left corner of the bounding box and ends at the bottom right
+    /// corner.
+    pub fn pixels(&self) -> impl Iterator<Item = bool> + '_ {
+        let width = usize::try_from(self.bounding_box.size.x).unwrap();
+        let height = usize::try_from(self.bounding_box.size.y).unwrap();
+
+        (0..height).flat_map(move |y| (0..width).map(move |x| self.pixel(x, y).unwrap()))
     }
 }
 
@@ -124,6 +139,11 @@ impl Glyphs {
         self.glyphs
             .binary_search_by_key(&Some(c), |glyph| glyph.encoding)
             .map_or(None, |i| Some(&self.glyphs[i]))
+    }
+
+    /// Returns `true` if the collection contains the given character.
+    pub fn contains(&self, c: char) -> bool {
+        self.get(c).is_some()
     }
 
     /// Returns an iterator over all glyphs.
@@ -234,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn access_pixels() {
+    fn pixel_getter() {
         let (chardata, _) = test_data();
         let (input, glyph) = Glyph::parse(chardata).unwrap();
         assert!(input.is_empty());
@@ -242,7 +262,7 @@ mod tests {
         let bitmap = (0..16)
             .map(|y| {
                 (0..8)
-                    .map(|x| if glyph.pixel(x, y) { '#' } else { ' ' })
+                    .map(|x| if glyph.pixel(x, y).unwrap() { '#' } else { ' ' })
                     .collect::<String>()
             })
             .collect::<Vec<_>>();
@@ -271,6 +291,51 @@ mod tests {
             .map(|s| s.to_string())
             .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn pixels_iterator() {
+        let (chardata, _) = test_data();
+        let (input, glyph) = Glyph::parse(chardata).unwrap();
+        assert!(input.is_empty());
+
+        let bitmap = glyph
+            .pixels()
+            .map(|v| if v { '#' } else { ' ' })
+            .collect::<String>();
+
+        assert_eq!(
+            bitmap,
+            concat!(
+                "        ", //
+                "        ", //
+                "        ", //
+                "        ", //
+                "   ##   ", //
+                "  #  #  ", //
+                "  #  #  ", //
+                " #    # ", //
+                " #    # ", //
+                " ###### ", //
+                " #    # ", //
+                " #    # ", //
+                " #    # ", //
+                " #    # ", //
+                "        ", //
+                "        ", //
+            )
+        );
+    }
+
+    #[test]
+    fn pixel_getter_outside() {
+        let (chardata, _) = test_data();
+        let (input, glyph) = Glyph::parse(chardata).unwrap();
+        assert!(input.is_empty());
+
+        assert_eq!(glyph.pixel(8, 0), None);
+        assert_eq!(glyph.pixel(0, 16), None);
+        assert_eq!(glyph.pixel(8, 16), None);
     }
 
     #[test]

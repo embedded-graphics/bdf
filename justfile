@@ -2,8 +2,7 @@ u8g2_revision := "3c6460a73f7f310c665cef0af1d2bac49bf6c655"
 bitmap_fonts_revision := "5c101c91bf2ed0039aad02f9bf76ddb2018b1f21"
 
 test:
-    cargo test -p eg-bdf
-    cargo test -p eg-bdf-macros
+    cargo test
     just test-parser
 
 test-parser: _clone-u8g2 _clone-bitmap-fonts

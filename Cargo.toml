@@ -2,5 +2,7 @@
 members = [
     "bdf-parser",
     "eg-bdf",
-    "eg-bdf-macros",
+    "eg-bdf-examples",
+    "eg-font-converter",
 ]
+resolver = "2"

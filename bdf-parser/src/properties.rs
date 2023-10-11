@@ -14,7 +14,7 @@ use crate::helpers::*;
 
 /// BDF file property.
 ///
-/// Source: https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/XLFD/xlfd.html
+/// Source: <https://www.x.org/releases/X11R7.6/doc/xorg-docs/specs/XLFD/xlfd.html>
 #[derive(Debug, PartialEq, Copy, Clone, Eq, PartialOrd, Ord, strum::Display)]
 #[strum(serialize_all = "shouty_snake_case")]
 pub enum Property {
@@ -151,7 +151,7 @@ impl Properties {
                     take_until("ENDPROPERTIES"),
                     statement("ENDPROPERTIES", eof),
                 ),
-                many0(property),
+                many0(skip_comments(property)),
             )),
             |properties| {
                 // Convert vector of properties into a HashMap

@@ -9,6 +9,8 @@ use embedded_graphics::{
 
 use crate::BdfFont;
 
+/// BDF character style.
+// TODO: rename to character style?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfTextStyle<'a, C> {
     font: &'a BdfFont<'a>,
@@ -16,8 +18,18 @@ pub struct BdfTextStyle<'a, C> {
 }
 
 impl<'a, C: PixelColor> BdfTextStyle<'a, C> {
+    /// Creates a new character style.
     pub fn new(font: &'a BdfFont<'a>, color: C) -> Self {
         Self { font, color }
+    }
+
+    fn baseline_offset(&self, baseline: Baseline) -> i32 {
+        match baseline {
+            Baseline::Top => self.font.ascent.saturating_sub(1) as i32,
+            Baseline::Bottom => -(self.font.descent as i32),
+            Baseline::Middle => (self.font.ascent as i32 - self.font.descent as i32) / 2,
+            Baseline::Alphabetic => 0,
+        }
     }
 }
 
@@ -40,14 +52,14 @@ impl<C: PixelColor> TextRenderer for BdfTextStyle<'_, C> {
     fn draw_string<D>(
         &self,
         text: &str,
-        mut position: Point,
-        _baseline: Baseline,
+        position: Point,
+        baseline: Baseline,
         target: &mut D,
     ) -> Result<Point, D::Error>
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        // TODO: handle baseline
+        let mut position = position + Point::new(0, self.baseline_offset(baseline));
 
         for c in text.chars() {
             let glyph = self.font.get_glyph(c);
@@ -64,32 +76,39 @@ impl<C: PixelColor> TextRenderer for BdfTextStyle<'_, C> {
         &self,
         width: u32,
         position: Point,
-        _baseline: Baseline,
+        baseline: Baseline,
         _target: &mut D,
     ) -> Result<Point, D::Error>
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        // TODO: handle baseline
+        let position = position + Point::new(0, self.baseline_offset(baseline));
 
         Ok(position + Size::new(width, 0))
     }
 
-    fn measure_string(&self, text: &str, position: Point, _baseline: Baseline) -> TextMetrics {
-        // TODO: handle baseline
+    fn measure_string(&self, text: &str, position: Point, baseline: Baseline) -> TextMetrics {
+        let position = position + Point::new(0, self.baseline_offset(baseline));
+
         let dx = text
             .chars()
             .map(|c| self.font.get_glyph(c).device_width)
             .sum();
 
-        // TODO: calculate bounding box
+        // TODO: calculate correct bounding box
+        let bounding_box = Rectangle::new(
+            position - Size::new(0, self.font.ascent.saturating_sub(1)),
+            Size::new(dx, self.line_height()),
+        );
+
         TextMetrics {
-            bounding_box: Rectangle::new(position, Size::zero()),
+            bounding_box,
             next_position: position + Size::new(dx, 0),
         }
     }
 
     fn line_height(&self) -> u32 {
-        self.font.line_height
+        // TODO: add separate line height field?
+        self.font.ascent + self.font.descent
     }
 }

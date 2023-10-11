@@ -3,15 +3,14 @@ name = "eg-bdf"
 description = "BDF text renderer for embedded-graphics"
 version = "0.1.0"
 authors = ["Ralf Fuest <mail@rfuest.de>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/embedded-graphics/bdf"
 license = "MIT OR Apache-2.0"
 categories = ["embedded", "no-std"]
 keywords = ["embedded-graphics", "font", "bdf"]
 
 [dependencies]
-embedded-graphics = "0.7.1"
-eg-bdf-macros = { version = "0.1.0", path = "../eg-bdf-macros" }
+embedded-graphics = "0.8.1"
 
 [dev-dependencies]
-embedded-graphics-simulator = "0.3.0"
+embedded-graphics-simulator = "0.5.0"
