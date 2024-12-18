@@ -82,7 +82,7 @@ impl EgBdfOutput {
                 start_index,
             } = glyph;
 
-            quote!(BdfGlyph {
+            quote!(::eg_bdf::BdfGlyph {
                 character: #character,
                 bounding_box: rect(#x, #y, #width, #height),
                 device_width: #device_width,
@@ -99,7 +99,7 @@ impl EgBdfOutput {
 
         Ok(prettyplease::unparse(&syn::parse2(quote!(
             #( #comments )*
-            const #constant_name: ::eg_bdf::BdfFont = {
+            pub const #constant_name: ::eg_bdf::BdfFont = {
                 const fn rect(x: i32, y: i32, width: u32, height: u32) -> ::embedded_graphics::primitives::Rectangle {
                     ::embedded_graphics::primitives::Rectangle::new(
                         ::embedded_graphics::geometry::Point::new(x, y),
