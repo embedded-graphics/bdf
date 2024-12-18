@@ -16,157 +16,157 @@ const EG_BDF_AZ: ::eg_bdf::BdfFont = {
         ascent: 8u32,
         descent: 2u32,
         glyphs: &[
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'a',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 0usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'b',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 60usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'c',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 120usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'd',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 180usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'e',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 240usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'f',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 300usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'g',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 360usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'h',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 420usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'i',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 480usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'j',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 540usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'k',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 600usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'l',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 660usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'm',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 720usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'n',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 780usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'o',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 840usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'p',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 900usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'q',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 960usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'r',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1020usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 's',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1080usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 't',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1140usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'u',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1200usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'v',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1260usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'w',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1320usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'x',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1380usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'y',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,
                 start_index: 1440usize,
             },
-            BdfGlyph {
+            ::eg_bdf::BdfGlyph {
                 character: 'z',
                 bounding_box: rect(0i32, -7i32, 6u32, 10u32),
                 device_width: 6u32,

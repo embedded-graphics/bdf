@@ -82,7 +82,7 @@ impl EgBdfOutput {
                 start_index,
             } = glyph;
 
-            quote!(BdfGlyph {
+            quote!(::eg_bdf::BdfGlyph {
                 character: #character,
                 bounding_box: rect(#x, #y, #width, #height),
                 device_width: #device_width,
