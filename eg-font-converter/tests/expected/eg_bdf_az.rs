@@ -1,4 +1,4 @@
-const EG_BDF_AZ: ::eg_bdf::BdfFont = {
+pub const EG_BDF_AZ: ::eg_bdf::BdfFont = {
     const fn rect(
         x: i32,
         y: i32,
