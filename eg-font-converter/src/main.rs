@@ -40,6 +40,10 @@ struct Args {
     #[arg(long, num_args = 2, id = "char", conflicts_with = "mapping")]
     glyph_range: Vec<char>,
 
+    /// Include all glyphs from the source BDF data.
+    #[arg(long, conflicts_with_all = ["char", "mapping"])]
+    glyphs_from_font: bool,
+
     /// Type path to the embedded-graphics crate
     #[arg(long, default_value = "::embedded_graphics")]
     embedded_graphics_crate_path: String,
@@ -78,7 +82,9 @@ fn convert(args: &Args) -> Result<()> {
     let mut converter = FontConverter::new(bdf_file, name)
         .embedded_graphics_crate_path(&args.embedded_graphics_crate_path);
 
-    if args.glyph_range.is_empty() {
+    if args.glyphs_from_font {
+        converter = converter.glyphs_from_font();
+    } else if args.glyph_range.is_empty() {
         converter = converter.glyphs(args.mapping);
     } else {
         for range in args.glyph_range.chunks(2) {

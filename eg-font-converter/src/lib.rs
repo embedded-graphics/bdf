@@ -108,7 +108,7 @@ pub struct FontConverter<'a> {
     comments: Vec<String>,
 
     glyphs: BTreeSet<char>,
-    mapping: Option<Mapping>,
+    glyphs_from_font: bool,
     missing_glyph_substitute: Option<char>,
 }
 
@@ -135,7 +135,7 @@ impl<'a> FontConverter<'a> {
             data_file_path: None,
             comments: Vec::new(),
             glyphs: BTreeSet::new(),
-            mapping: None,
+            glyphs_from_font: false,
             missing_glyph_substitute: None,
         }
     }
@@ -171,6 +171,15 @@ impl<'a> FontConverter<'a> {
     /// ```
     pub fn glyphs<G: GlyphRange>(mut self, glyphs: G) -> Self {
         self.glyphs.extend(glyphs.glyphs());
+
+        self
+    }
+
+    /// Requests that the generated font use all the glyphs defined in the BDF data.
+    ///
+    /// Mutually exclusive with [`glyphs`]. Defaults to `false`.
+    pub fn glyphs_from_font(mut self) -> Self {
+        self.glyphs_from_font = true;
 
         self
     }
@@ -257,10 +266,17 @@ impl<'a> FontConverter<'a> {
             self.name
         );
 
-        ensure!(
-            !self.glyphs.is_empty() || self.mapping.is_some(),
-            "at least one glyph range must be specified"
-        );
+        if self.glyphs_from_font {
+            ensure!(
+                self.glyphs.is_empty(),
+                "all glyphs from font and specific glyph ranges cannot be combined"
+            );
+        } else {
+            ensure!(
+                !self.glyphs.is_empty(),
+                "at least one glyph range must be specified"
+            );
+        }
 
         let bdf = match &self.bdf {
             FileOrData::File(file) => {
@@ -274,35 +290,38 @@ impl<'a> FontConverter<'a> {
             }
         };
 
-        let glyphs = self
-            .glyphs
-            .iter()
-            .copied()
-            .map(|c| {
-                let glyph_c =
-                    if bdf.glyphs.get(c).is_none() && self.missing_glyph_substitute.is_some() {
-                        self.missing_glyph_substitute.unwrap()
-                    } else {
-                        c
-                    };
+        let glyphs = if self.glyphs_from_font {
+            bdf.glyphs.iter().cloned().collect()
+        } else {
+            self.glyphs
+                .iter()
+                .copied()
+                .map(|c| {
+                    let glyph_c =
+                        if bdf.glyphs.get(c).is_none() && self.missing_glyph_substitute.is_some() {
+                            self.missing_glyph_substitute.unwrap()
+                        } else {
+                            c
+                        };
 
-                bdf.glyphs
-                    .get(glyph_c)
-                    .cloned()
-                    .map(|mut glyph| {
-                        // replace glyph encoding for substitutes
-                        glyph.encoding = Some(c);
-                        glyph
-                    })
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "glyph '{}' (U+{:04X}) is not contained in the BDF font",
-                            glyph_c,
-                            u32::from(glyph_c)
-                        )
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    bdf.glyphs
+                        .get(glyph_c)
+                        .cloned()
+                        .map(|mut glyph| {
+                            // replace glyph encoding for substitutes
+                            glyph.encoding = Some(c);
+                            glyph
+                        })
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "glyph '{}' (U+{:04X}) is not contained in the BDF font",
+                                glyph_c,
+                                u32::from(glyph_c)
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
         // TODO: handle missing (incorrect?) properties
         let ascent = bdf
