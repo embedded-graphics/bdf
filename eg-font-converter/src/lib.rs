@@ -108,7 +108,6 @@ pub struct FontConverter<'a> {
     comments: Vec<String>,
 
     glyphs: BTreeSet<char>,
-    glyphs_from_font: bool,
     missing_glyph_substitute: Option<char>,
 }
 
@@ -135,12 +134,14 @@ impl<'a> FontConverter<'a> {
             data_file_path: None,
             comments: Vec::new(),
             glyphs: BTreeSet::new(),
-            glyphs_from_font: false,
             missing_glyph_substitute: None,
         }
     }
 
     /// Adds glyphs to the generated font.
+    ///
+    /// If no specific glyph ranges are provided, all glyphs in the source
+    /// BDF data are converted.
     ///
     /// # Examples
     ///
@@ -171,15 +172,6 @@ impl<'a> FontConverter<'a> {
     /// ```
     pub fn glyphs<G: GlyphRange>(mut self, glyphs: G) -> Self {
         self.glyphs.extend(glyphs.glyphs());
-
-        self
-    }
-
-    /// Requests that the generated font use all the glyphs defined in the BDF data.
-    ///
-    /// Mutually exclusive with [`glyphs`]. Defaults to `false`.
-    pub fn glyphs_from_font(mut self) -> Self {
-        self.glyphs_from_font = true;
 
         self
     }
@@ -266,18 +258,6 @@ impl<'a> FontConverter<'a> {
             self.name
         );
 
-        if self.glyphs_from_font {
-            ensure!(
-                self.glyphs.is_empty(),
-                "all glyphs from font and specific glyph ranges cannot be combined"
-            );
-        } else {
-            ensure!(
-                !self.glyphs.is_empty(),
-                "at least one glyph range must be specified"
-            );
-        }
-
         let bdf = match &self.bdf {
             FileOrData::File(file) => {
                 let data = std::fs::read(file)
@@ -290,7 +270,7 @@ impl<'a> FontConverter<'a> {
             }
         };
 
-        let glyphs = if self.glyphs_from_font {
+        let glyphs = if self.glyphs.is_empty() {
             bdf.glyphs.iter().cloned().collect()
         } else {
             self.glyphs
@@ -607,13 +587,10 @@ mod tests {
     }
 
     #[test]
-    fn error_no_glyph_ranges() {
-        assert_eq!(
-            FontConverter::new_from_data(FONT, "TEST")
-                .convert()
-                .unwrap_err()
-                .to_string(),
-            "at least one glyph range must be specified"
-        );
+    fn no_glyph_ranges() {
+        let converter = FontConverter::new_from_data(FONT, "TEST");
+        let font = converter.convert().unwrap();
+        assert_eq!(font.glyphs.len(), 1);
+        assert_eq!(font.glyphs[0].encoding, Some('\0'));
     }
 }
