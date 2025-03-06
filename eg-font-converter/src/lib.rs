@@ -2,12 +2,12 @@
 //!
 //! This crate can be used to convert BDF fonts into [`embedded-graphics`] fonts.
 //! Two output formats are supported: [`MonoFont`] and [`BdfFont`]. Support for
-//! [`MonoFont`]s is included in [`embedded-graphics`] and not additional crates
+//! [`MonoFont`]s is included in [`embedded-graphics`] and no additional crates
 //! are required. [`BdfFont`]s require an additional dependency on the
 //! [`eg-bdf`] crate and have the advantage that proportional fonts are
 //! supported.
 //!
-//! The create can either be used as a library to convert fonts in a
+//! The crate can either be used as a library to convert fonts in a
 //! build script or as a command line to convert them ahead of time.
 //!
 //! # Using `eg_font_converter` in a build script
@@ -51,6 +51,9 @@
 //! ```sh
 //! eg-font-converter --glyph-range A Z --rust font.rs --data font.data 6x10.bdf FONT
 //! ```
+//! If the `--glyph-range` or `--mapping` options are not specified to limit the
+//! selection of glyphs, all glyphs in the source font are included by default.
+//!
 //! The generated files can be included into a project by using the [`include!`]
 //! macro or with a `mod` statement, if the generated files are inside the
 //! project's `src` directory.
