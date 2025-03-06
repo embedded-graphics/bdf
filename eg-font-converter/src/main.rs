@@ -32,11 +32,11 @@ struct Args {
     #[arg(long)]
     png: Option<PathBuf>,
 
-    /// Include all glyphs from a mapping.
-    #[arg(long, value_parser = parse_mapping, default_value = "ASCII")]
-    mapping: Mapping,
+    /// Limit the selection of glyphs to those included in the provided mapping.
+    #[arg(long, value_parser = parse_mapping)]
+    mapping: Option<Mapping>,
 
-    /// Include all glyphs in the given inclusive range.
+    /// Limit the selection of glyphs to the given inclusive range.
     #[arg(long, num_args = 2, id = "char", conflicts_with = "mapping")]
     glyph_range: Vec<char>,
 
@@ -78,9 +78,9 @@ fn convert(args: &Args) -> Result<()> {
     let mut converter = FontConverter::new(bdf_file, name)
         .embedded_graphics_crate_path(&args.embedded_graphics_crate_path);
 
-    if args.glyph_range.is_empty() {
-        converter = converter.glyphs(args.mapping);
-    } else {
+    if let Some(mapping) = args.mapping {
+        converter = converter.glyphs(mapping);
+    } else if !args.glyph_range.is_empty() {
         for range in args.glyph_range.chunks(2) {
             converter = converter.glyphs(range[0]..=range[1]);
         }

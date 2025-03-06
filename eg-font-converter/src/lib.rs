@@ -2,12 +2,12 @@
 //!
 //! This crate can be used to convert BDF fonts into [`embedded-graphics`] fonts.
 //! Two output formats are supported: [`MonoFont`] and [`BdfFont`]. Support for
-//! [`MonoFont`]s is included in [`embedded-graphics`] and not additional crates
+//! [`MonoFont`]s is included in [`embedded-graphics`] and no additional crates
 //! are required. [`BdfFont`]s require an additional dependency on the
 //! [`eg-bdf`] crate and have the advantage that proportional fonts are
 //! supported.
 //!
-//! The create can either be used as a library to convert fonts in a
+//! The crate can either be used as a library to convert fonts in a
 //! build script or as a command line to convert them ahead of time.
 //!
 //! # Using `eg_font_converter` in a build script
@@ -51,6 +51,9 @@
 //! ```sh
 //! eg-font-converter --glyph-range A Z --rust font.rs --data font.data 6x10.bdf FONT
 //! ```
+//! If the `--glyph-range` or `--mapping` options are not specified to limit the
+//! selection of glyphs, all glyphs in the source font are included by default.
+//!
 //! The generated files can be included into a project by using the [`include!`]
 //! macro or with a `mod` statement, if the generated files are inside the
 //! project's `src` directory.
@@ -108,7 +111,6 @@ pub struct FontConverter<'a> {
     comments: Vec<String>,
 
     glyphs: BTreeSet<char>,
-    mapping: Option<Mapping>,
     missing_glyph_substitute: Option<char>,
 }
 
@@ -135,12 +137,14 @@ impl<'a> FontConverter<'a> {
             data_file_path: None,
             comments: Vec::new(),
             glyphs: BTreeSet::new(),
-            mapping: None,
             missing_glyph_substitute: None,
         }
     }
 
     /// Adds glyphs to the generated font.
+    ///
+    /// If no specific glyph ranges are provided, all glyphs in the source
+    /// BDF data are converted.
     ///
     /// # Examples
     ///
@@ -257,11 +261,6 @@ impl<'a> FontConverter<'a> {
             self.name
         );
 
-        ensure!(
-            !self.glyphs.is_empty() || self.mapping.is_some(),
-            "at least one glyph range must be specified"
-        );
-
         let bdf = match &self.bdf {
             FileOrData::File(file) => {
                 let data = std::fs::read(file)
@@ -274,35 +273,38 @@ impl<'a> FontConverter<'a> {
             }
         };
 
-        let glyphs = self
-            .glyphs
-            .iter()
-            .copied()
-            .map(|c| {
-                let glyph_c =
-                    if bdf.glyphs.get(c).is_none() && self.missing_glyph_substitute.is_some() {
-                        self.missing_glyph_substitute.unwrap()
-                    } else {
-                        c
-                    };
+        let glyphs = if self.glyphs.is_empty() {
+            bdf.glyphs.iter().cloned().collect()
+        } else {
+            self.glyphs
+                .iter()
+                .copied()
+                .map(|c| {
+                    let glyph_c =
+                        if bdf.glyphs.get(c).is_none() && self.missing_glyph_substitute.is_some() {
+                            self.missing_glyph_substitute.unwrap()
+                        } else {
+                            c
+                        };
 
-                bdf.glyphs
-                    .get(glyph_c)
-                    .cloned()
-                    .map(|mut glyph| {
-                        // replace glyph encoding for substitutes
-                        glyph.encoding = Some(c);
-                        glyph
-                    })
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "glyph '{}' (U+{:04X}) is not contained in the BDF font",
-                            glyph_c,
-                            u32::from(glyph_c)
-                        )
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    bdf.glyphs
+                        .get(glyph_c)
+                        .cloned()
+                        .map(|mut glyph| {
+                            // replace glyph encoding for substitutes
+                            glyph.encoding = Some(c);
+                            glyph
+                        })
+                        .ok_or_else(|| {
+                            anyhow!(
+                                "glyph '{}' (U+{:04X}) is not contained in the BDF font",
+                                glyph_c,
+                                u32::from(glyph_c)
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
         // TODO: handle missing (incorrect?) properties
         let ascent = bdf
@@ -588,13 +590,10 @@ mod tests {
     }
 
     #[test]
-    fn error_no_glyph_ranges() {
-        assert_eq!(
-            FontConverter::new_from_data(FONT, "TEST")
-                .convert()
-                .unwrap_err()
-                .to_string(),
-            "at least one glyph range must be specified"
-        );
+    fn no_glyph_ranges() {
+        let converter = FontConverter::new_from_data(FONT, "TEST");
+        let font = converter.convert().unwrap();
+        assert_eq!(font.glyphs.len(), 1);
+        assert_eq!(font.glyphs[0].encoding, Some('\0'));
     }
 }
