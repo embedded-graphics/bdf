@@ -40,11 +40,7 @@ impl MonoFontOutput {
         let columns = glyphs_per_row; // TODO: allow smaller column count
         let rows = (font.glyphs.len() + (glyphs_per_row - 1)) / glyphs_per_row;
 
-        //TODO: don't assume that all glyphs are equally sized
-        //TODO: don't assume that at least one glyph is present (or is this already checked by EgBdfOutput)
-        let first_glyph = font.glyphs[0];
-
-        let character_size = first_glyph.bounding_box.size;
+        let character_size = bdf.bounding_box().size;
         let character_spacing = 0;
         let baseline = bdf.font.ascent.saturating_sub(1);
         let strikethrough = DecorationDimensions::new(

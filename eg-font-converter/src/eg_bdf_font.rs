@@ -32,12 +32,14 @@ pub struct EgBdfOutput {
     pub(crate) font: Font,
     data: BitVec<u8, Msb0>,
     glyphs: Vec<BdfGlyph>,
+    bounding_box: Rectangle,
 }
 
 impl EgBdfOutput {
     pub(crate) fn new(font: Font) -> Result<Self> {
         let mut data = BitVec::<u8, Msb0>::new();
         let mut glyphs = Vec::new();
+        let bounding_box = bounding_box_to_rectangle(&font.bdf.metadata.bounding_box);
 
         for glyph in font.glyphs.iter() {
             let bounding_box = bounding_box_to_rectangle(&glyph.bounding_box);
@@ -52,7 +54,12 @@ impl EgBdfOutput {
             data.extend(glyph.pixels());
         }
 
-        Ok(Self { font, data, glyphs })
+        Ok(Self {
+            font,
+            data,
+            glyphs,
+            bounding_box,
+        })
     }
 
     /// Returns the generated Rust code.
@@ -116,6 +123,11 @@ impl EgBdfOutput {
                 }
             };
         ))?))
+    }
+
+    /// Returns the font bounding box.
+    pub fn bounding_box(&self) -> Rectangle {
+        self.bounding_box
     }
 
     /// Returns the bitmap data.
