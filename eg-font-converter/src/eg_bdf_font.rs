@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path};
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use bdf_parser::{BoundingBox, Encoding};
 use bitvec::{prelude::*, vec::BitVec};
 use eg_bdf::{BdfFont, BdfGlyph};
@@ -45,10 +45,12 @@ impl EgBdfOutput {
             let bounding_box = bounding_box_to_rectangle(&glyph.bounding_box);
 
             // TODO: assumes unicode
-            // TODO: improved error handling
             let character = match glyph.encoding {
                 Encoding::Standard(index) => char::from_u32(index).unwrap(),
-                _ => bail!("invalid encoding"),
+                _ => {
+                    // TODO: add warning about skipped glyphs
+                    continue;
+                }
             };
 
             glyphs.push(BdfGlyph {
