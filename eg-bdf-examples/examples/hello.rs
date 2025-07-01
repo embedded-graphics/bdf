@@ -1,4 +1,4 @@
-use eg_bdf::{BdfGlyph, BdfTextStyle};
+use eg_bdf::BdfTextStyle;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::Rgb888,

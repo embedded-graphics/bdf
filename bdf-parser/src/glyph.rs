@@ -80,7 +80,7 @@ impl Glyph {
             return None;
         }
 
-        let bytes_per_row = (width + 7) / 8;
+        let bytes_per_row = width.div_ceil(8);
         let byte_offset = x / 8;
         let bit_mask = 0x80 >> (x % 8);
 

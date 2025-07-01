@@ -38,7 +38,7 @@ impl MonoFontOutput {
 
         let glyphs_per_row = 16; //TODO: make configurable
         let columns = glyphs_per_row; // TODO: allow smaller column count
-        let rows = (font.glyphs.len() + (glyphs_per_row - 1)) / glyphs_per_row;
+        let rows = font.glyphs.len().div_ceil(glyphs_per_row);
 
         let character_size = bdf.bounding_box().size;
         let character_spacing = 0;
@@ -149,7 +149,7 @@ impl MonoFontOutput {
         };
 
         let comments = self.font.comments.iter().map(|comment| {
-            let comment = format!(" {}", comment);
+            let comment = format!(" {comment}");
             quote!(
                 #[doc = #comment]
             )
@@ -193,8 +193,8 @@ impl MonoFontOutput {
     pub fn save<P: AsRef<Path>>(&self, output_directory: P) -> io::Result<()> {
         let output_directory = output_directory.as_ref();
 
-        fs::write(self.font.rust_file_path(output_directory), &self.rust())?;
-        fs::write(self.font.data_file_path(output_directory), &self.data())?;
+        fs::write(self.font.rust_file_path(output_directory), self.rust())?;
+        fs::write(self.font.data_file_path(output_directory), self.data())?;
 
         Ok(())
     }

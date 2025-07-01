@@ -17,16 +17,14 @@
 //! ```no_run
 //! use eg_font_converter::{FontConverter, Mapping};
 //!
-//! fn main() {
-//!     let out_dir = std::env::var_os("OUT_DIR").unwrap();
+//! let out_dir = std::env::var_os("OUT_DIR").unwrap();
 //!
-//!     let font_6x10 = FontConverter::new("examples/6x10.bdf", "FONT_6X10_AZ")
-//!         .glyphs('A'..='Z')
-//!         .convert_mono_font()
-//!         .unwrap();
+//! let font_6x10 = FontConverter::new("examples/6x10.bdf", "FONT_6X10_AZ")
+//!     .glyphs('A'..='Z')
+//!     .convert_mono_font()
+//!     .unwrap();
 //!
-//!      font_6x10.save(&out_dir).unwrap();
-//! }
+//! font_6x10.save(&out_dir).unwrap();
 //! ```
 //!
 //! And then use the [`include!`] macro to import the generated code into your project:
@@ -264,12 +262,13 @@ impl<'a> FontConverter<'a> {
         let bdf = match &self.bdf {
             FileOrData::File(file) => {
                 let data = std::fs::read(file)
-                    .with_context(|| format!("couldn't read BDF file from {:?}", file))?;
+                    .with_context(|| format!("couldn't read BDF file from {file:?}"))?;
 
-                ParserBdfFont::parse(&data).with_context(|| format!("couldn't parse BDF file"))?
+                ParserBdfFont::parse(&data)
+                    .with_context(|| "couldn't parse BDF file".to_string())?
             }
             FileOrData::Data(data) => {
-                ParserBdfFont::parse(data).with_context(|| format!("couldn't parse BDF file"))?
+                ParserBdfFont::parse(data).with_context(|| "couldn't parse BDF file".to_string())?
             }
         };
 
@@ -439,7 +438,7 @@ impl Font {
     }
 
     fn data_file_path(&self, output_directory: &Path) -> PathBuf {
-        output_directory.join(&self.data_file())
+        output_directory.join(self.data_file())
     }
 }
 
@@ -518,8 +517,10 @@ pub enum Visibility {
     PubIn(String),
 }
 
-impl ToString for Visibility {
-    fn to_string(&self) -> String {
+impl Visibility {
+    // TODO: is Visibility even used anymore?
+    #[allow(unused)]
+    fn to_rust(&self) -> String {
         match self {
             Visibility::Private => "",
             Visibility::Pub => "pub",

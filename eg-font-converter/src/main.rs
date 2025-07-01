@@ -121,7 +121,7 @@ fn main() {
     }
 
     if let Err(e) = convert(&args) {
-        eprintln!("Error: {:#}", e);
+        eprintln!("Error: {e:#}");
         std::process::exit(1);
     }
 }

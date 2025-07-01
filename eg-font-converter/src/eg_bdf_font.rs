@@ -105,7 +105,7 @@ impl EgBdfOutput {
         });
 
         let comments = self.font.comments.iter().map(|comment| {
-            let comment = format!(" {}", comment);
+            let comment = format!(" {comment}");
             quote!(
                 #[doc = #comment]
             )
@@ -157,8 +157,8 @@ impl EgBdfOutput {
     pub fn save<P: AsRef<Path>>(&self, output_directory: P) -> io::Result<()> {
         let output_directory = output_directory.as_ref();
 
-        fs::write(self.font.rust_file_path(output_directory), &self.rust())?;
-        fs::write(self.font.data_file_path(output_directory), &self.data())?;
+        fs::write(self.font.rust_file_path(output_directory), self.rust())?;
+        fs::write(self.font.data_file_path(output_directory), self.data())?;
 
         Ok(())
     }
