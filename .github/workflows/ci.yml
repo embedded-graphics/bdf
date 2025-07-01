@@ -1,13 +1,6 @@
 name: CI
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-env:
-  CARGO_TERM_COLOR: always
+on: [push, pull_request]
 
 jobs:
   test:
@@ -17,25 +10,17 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update && sudo apt install libsdl2-dev
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - run: cargo test
 
   parser-tests:
     name: Run parser tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: just
-          version: latest
-      - uses: actions/checkout@v2
+      - uses: taiki-e/install-action@just
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
       - name: Run tests
         run: |
           just test-parser
@@ -44,29 +29,18 @@ jobs:
     name: Check formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
           components: rustfmt
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - uses: actions/checkout@v4
+      - run: cargo fmt --check
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          components: clippy
-          override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          components: rustfmt
+      - uses: actions/checkout@v4
+      - run: cargo clippy -- --deny=warnings
