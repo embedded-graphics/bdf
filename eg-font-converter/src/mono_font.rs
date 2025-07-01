@@ -28,6 +28,7 @@ pub struct MonoFontOutput {
     underline: DecorationDimensions,
     strikethrough: DecorationDimensions,
 
+    glyphs: Vec<Glyph>,
     mapping: Option<Mapping>,
 }
 
@@ -68,7 +69,14 @@ impl MonoFontOutput {
                 })
                 .collect::<Vec<_>>()
         } else {
-            bdf.font.glyphs.clone()
+            // Filter out all non standard glyphs.
+            // TODO: add a warning
+            bdf.font
+                .glyphs
+                .iter()
+                .filter(|g| matches!(g.encoding, Encoding::Standard(_)))
+                .cloned()
+                .collect()
         };
 
         for (i, glyph) in glyphs.iter().enumerate() {
@@ -78,7 +86,7 @@ impl MonoFontOutput {
             // TODO: assumes unicode
             let c = match glyph.encoding {
                 Encoding::Standard(index) => char::from_u32(index).unwrap(),
-                _ => bail!("invalid encoding"),
+                _ => bail!("invalid encoding: '{:?}'", glyph.encoding),
             };
 
             Text::with_baseline(&String::from(c), Point::new(x, y), style, Baseline::Top)
@@ -97,6 +105,7 @@ impl MonoFontOutput {
             baseline,
             underline,
             strikethrough,
+            glyphs,
             mapping,
         })
     }
@@ -135,14 +144,12 @@ impl MonoFontOutput {
             let mime = format_ident!("{}", mapping.mime());
             quote!(::embedded_graphics::mono_font::mapping::#mime)
         } else {
-            let str_mapping = glyphs_to_str_mapping(self.font.glyphs.iter().map(|glyph| {
+            let str_mapping = glyphs_to_str_mapping(self.glyphs.iter().map(|glyph| {
                 // TODO: assumes unicode
-                let c = match glyph.encoding {
+                match glyph.encoding {
                     Encoding::Standard(index) => char::from_u32(index).unwrap(),
-                    _ => panic!("invalid encoding"),
-                };
-
-                c
+                    _ => unreachable!(),
+                }
             }));
             let replacement = self.font.replacement_character;
             quote!(::embedded_graphics::mono_font::mapping::StrGlyphMapping::new(#str_mapping, #replacement))
@@ -256,14 +263,12 @@ fn glyphs_to_mapping(glyphs: &[Glyph]) -> Option<Mapping> {
             .iter()
             .map(|glyph| {
                 // TODO: assumes unicode
-                let c = match glyph.encoding {
-                    Encoding::Standard(index) => char::from_u32(index).unwrap(),
-                    _ => panic!("invalid encoding"),
-                };
-
-                c
+                match glyph.encoding {
+                    Encoding::Standard(index) => char::from_u32(index),
+                    _ => None,
+                }
             })
-            .eq(chars.iter().copied())
+            .eq(chars.iter().map(|c| Some(*c)))
         {
             return Some(mapping);
         }
