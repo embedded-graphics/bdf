@@ -1,7 +1,7 @@
 use std::{fs, io, ops::RangeInclusive, path::Path};
 
-use anyhow::{Context, Result};
-use bdf_parser::{BdfFont as ParserBdfFont, Glyph};
+use anyhow::{bail, Context, Result};
+use bdf_parser::{BdfFont as ParserBdfFont, Encoding, Glyph};
 use eg_bdf::BdfTextStyle;
 use embedded_graphics::{
     image::ImageRaw,
@@ -75,14 +75,15 @@ impl MonoFontOutput {
             let x = (i % glyphs_per_row) as i32 * character_size.width as i32;
             let y = (i / glyphs_per_row) as i32 * character_size.height as i32;
 
-            Text::with_baseline(
-                &String::from(glyph.encoding.unwrap()),
-                Point::new(x, y),
-                style,
-                Baseline::Top,
-            )
-            .draw(&mut bitmap)
-            .unwrap();
+            // TODO: assumes unicode
+            let c = match glyph.encoding {
+                Encoding::Standard(index) => char::from_u32(index).unwrap(),
+                _ => bail!("invalid encoding"),
+            };
+
+            Text::with_baseline(&String::from(c), Point::new(x, y), style, Baseline::Top)
+                .draw(&mut bitmap)
+                .unwrap();
         }
 
         let data = bitmap.to_be_bytes();
@@ -134,8 +135,15 @@ impl MonoFontOutput {
             let mime = format_ident!("{}", mapping.mime());
             quote!(::embedded_graphics::mono_font::mapping::#mime)
         } else {
-            let str_mapping =
-                glyphs_to_str_mapping(self.font.glyphs.iter().map(|glyph| glyph.encoding.unwrap()));
+            let str_mapping = glyphs_to_str_mapping(self.font.glyphs.iter().map(|glyph| {
+                // TODO: assumes unicode
+                let c = match glyph.encoding {
+                    Encoding::Standard(index) => char::from_u32(index).unwrap(),
+                    _ => panic!("invalid encoding"),
+                };
+
+                c
+            }));
             let replacement = self.font.replacement_character;
             quote!(::embedded_graphics::mono_font::mapping::StrGlyphMapping::new(#str_mapping, #replacement))
         };
@@ -246,7 +254,15 @@ fn glyphs_to_mapping(glyphs: &[Glyph]) -> Option<Mapping> {
 
         if glyphs
             .iter()
-            .map(|glyph| glyph.encoding.unwrap())
+            .map(|glyph| {
+                // TODO: assumes unicode
+                let c = match glyph.encoding {
+                    Encoding::Standard(index) => char::from_u32(index).unwrap(),
+                    _ => panic!("invalid encoding"),
+                };
+
+                c
+            })
             .eq(chars.iter().copied())
         {
             return Some(mapping);
@@ -293,7 +309,7 @@ mod tests {
     fn test_glyphs_to_mapping() {
         let glyphs = (' '..='\x7F')
             .map(|c| Glyph {
-                encoding: Some(c),
+                encoding: Encoding::Standard(c as u32),
                 ..Glyph::default()
             })
             .collect::<Vec<_>>();
@@ -302,7 +318,7 @@ mod tests {
         let glyphs = (' '..='\x7F')
             .chain(0xA0 as char..=0xFF as char)
             .map(|c| Glyph {
-                encoding: Some(c),
+                encoding: Encoding::Standard(c as u32),
                 ..Glyph::default()
             })
             .collect::<Vec<_>>();

@@ -19,7 +19,7 @@ mod glyph;
 mod metadata;
 mod properties;
 
-pub use glyph::{Glyph, Glyphs};
+pub use glyph::{Encoding, Glyph, Glyphs};
 use helpers::*;
 pub use metadata::Metadata;
 pub use properties::{Properties, Property, PropertyError};
@@ -236,7 +236,7 @@ mod tests {
                         size: Coord::new(8, 8),
                         offset: Coord::new(0, 0),
                     },
-                    encoding: Some('@'), //64
+                    encoding: Encoding::Standard(64), // '@'
                     name: "Char 0".to_string(),
                     device_width: Coord::new(8, 0),
                     scalable_width: None,
@@ -247,7 +247,7 @@ mod tests {
                         size: Coord::new(8, 8),
                         offset: Coord::new(0, 0),
                     },
-                    encoding: Some('A'), //65
+                    encoding: Encoding::Standard(65), // 'A'
                     name: "Char 1".to_string(),
                     device_width: Coord::new(8, 0),
                     scalable_width: None,
