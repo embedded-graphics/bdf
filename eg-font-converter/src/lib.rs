@@ -74,7 +74,7 @@
 #![deny(unsafe_code)]
 
 use anyhow::{anyhow, ensure, Context, Result};
-use bdf_parser::{BdfFont as ParserBdfFont, Glyph, Property};
+use bdf_parser::{BdfFont as ParserBdfFont, Encoding, Glyph, Property};
 use embedded_graphics::mono_font::mapping::GlyphMapping;
 use std::{
     collections::BTreeSet,
@@ -292,7 +292,8 @@ impl<'a> FontConverter<'a> {
                         .cloned()
                         .map(|mut glyph| {
                             // replace glyph encoding for substitutes
-                            glyph.encoding = Some(c);
+                            // TODO: assumes unicode
+                            glyph.encoding = Encoding::Standard(c as u32);
                             glyph
                         })
                         .ok_or_else(|| {
@@ -412,10 +413,13 @@ struct Font {
 
 impl Font {
     fn glyph_index(&self, c: char) -> Option<usize> {
+        // TODO: assumes unicode
+        let encoding = Encoding::Standard(c as u32);
+
         self.glyphs
             .iter()
             .enumerate()
-            .find(|(_, glyph)| glyph.encoding == Some(c))
+            .find(|(_, glyph)| glyph.encoding == encoding)
             .map(|(index, _)| index)
     }
 
@@ -441,10 +445,13 @@ impl Font {
 
 impl GlyphMapping for Font {
     fn index(&self, c: char) -> usize {
+        // TODO: assumes unicode
+        let encoding = Encoding::Standard(c as u32);
+
         self.glyphs
             .iter()
             .enumerate()
-            .find(|(_, glyph)| glyph.encoding.unwrap() == c)
+            .find(|(_, glyph)| glyph.encoding == encoding)
             .map(|(index, _)| index)
             .unwrap()
     }
@@ -594,6 +601,6 @@ mod tests {
         let converter = FontConverter::new_from_data(FONT, "TEST");
         let font = converter.convert().unwrap();
         assert_eq!(font.glyphs.len(), 1);
-        assert_eq!(font.glyphs[0].encoding, Some('\0'));
+        assert_eq!(font.glyphs[0].encoding, Encoding::Standard(0));
     }
 }

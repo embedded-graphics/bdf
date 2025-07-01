@@ -10,6 +10,18 @@ use std::convert::TryFrom;
 
 use crate::{helpers::*, BoundingBox, Coord};
 
+/// Glyph encoding
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Encoding {
+    /// Standard encoding
+    Standard(u32),
+    /// Non standard encoding
+    NonStandard(u32),
+    /// Unspecified encoding
+    #[default]
+    Unspecified,
+}
+
 /// Glyph.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Glyph {
@@ -17,7 +29,7 @@ pub struct Glyph {
     pub name: String,
 
     /// Encoding.
-    pub encoding: Option<char>,
+    pub encoding: Encoding,
 
     /// Scalable width.
     pub scalable_width: Option<Coord>,
@@ -89,10 +101,19 @@ impl Glyph {
     }
 }
 
-fn parse_encoding(input: &[u8]) -> IResult<&[u8], Option<char>> {
-    map(parse_to_i32, |code| {
-        u32::try_from(code).ok().and_then(std::char::from_u32)
-    })(input)
+fn parse_encoding(input: &[u8]) -> IResult<&[u8], Encoding> {
+    let (input, standard_encoding) = parse_to_i32(input)?;
+    let (input, non_standard_encoding) = opt(preceded(multispace0, parse_to_i32))(input)?;
+
+    let encoding = if standard_encoding >= 0 {
+        Encoding::Standard(u32::try_from(standard_encoding).unwrap())
+    } else if let Some(non_standard) = non_standard_encoding {
+        Encoding::NonStandard(u32::try_from(non_standard).unwrap())
+    } else {
+        Encoding::Unspecified
+    };
+
+    Ok((input, encoding))
 }
 
 fn parse_bitmap(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
@@ -136,8 +157,11 @@ impl Glyphs {
 
     /// Gets a glyph by the encoding.
     pub fn get(&self, c: char) -> Option<&Glyph> {
+        // TODO: this assumes that the font uses unicode
+        let encoding = Encoding::Standard(c as u32);
+
         self.glyphs
-            .binary_search_by_key(&Some(c), |glyph| glyph.encoding)
+            .binary_search_by_key(&encoding, |glyph| glyph.encoding)
             .map_or(None, |i| Some(&self.glyphs[i]))
     }
 
@@ -222,7 +246,7 @@ mod tests {
             "#},
             Glyph {
                 name: "ZZZZ".to_string(),
-                encoding: Some('A'), //65
+                encoding: Encoding::Standard(65), // 'A'
                 bitmap: vec![
                     0x00, 0x00, 0x00, 0x00, 0x18, 0x24, 0x24, 0x42, 0x42, 0x7e, 0x42, 0x42, 0x42,
                     0x42, 0x00, 0x00,
@@ -358,7 +382,35 @@ mod tests {
                     size: Coord::new(0, 0),
                     offset: Coord::new(0, 0),
                 },
-                encoding: None,
+                encoding: Encoding::Unspecified,
+                name: "000".to_string(),
+                scalable_width: Some(Coord::new(432, 0)),
+                device_width: Coord::new(6, 0),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_glyph_with_no_encoding_and_index() {
+        let chardata = indoc! {br#"
+            STARTCHAR 000
+            ENCODING -1 123
+            SWIDTH 432 0
+            DWIDTH 6 0
+            BBX 0 0 0 0
+            BITMAP
+            ENDCHAR
+        "#};
+
+        assert_parser_ok!(
+            Glyph::parse(chardata),
+            Glyph {
+                bitmap: vec![],
+                bounding_box: BoundingBox {
+                    size: Coord::new(0, 0),
+                    offset: Coord::new(0, 0),
+                },
+                encoding: Encoding::NonStandard(123),
                 name: "000".to_string(),
                 scalable_width: Some(Coord::new(432, 0)),
                 device_width: Coord::new(6, 0),
@@ -386,7 +438,7 @@ mod tests {
                     size: Coord::new(0, 0),
                     offset: Coord::new(0, 0),
                 },
-                encoding: Some('\x00'),
+                encoding: Encoding::Standard(0),
                 name: "000".to_string(),
                 scalable_width: Some(Coord::new(432, 0)),
                 device_width: Coord::new(6, 0),

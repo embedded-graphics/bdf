@@ -1,7 +1,7 @@
 use std::{fs, io, path::Path};
 
-use anyhow::Result;
-use bdf_parser::BoundingBox;
+use anyhow::{bail, Result};
+use bdf_parser::{BoundingBox, Encoding};
 use bitvec::{prelude::*, vec::BitVec};
 use eg_bdf::{BdfFont, BdfGlyph};
 use embedded_graphics::{
@@ -44,8 +44,15 @@ impl EgBdfOutput {
         for glyph in font.glyphs.iter() {
             let bounding_box = bounding_box_to_rectangle(&glyph.bounding_box);
 
+            // TODO: assumes unicode
+            // TODO: improved error handling
+            let character = match glyph.encoding {
+                Encoding::Standard(index) => char::from_u32(index).unwrap(),
+                _ => bail!("invalid encoding"),
+            };
+
             glyphs.push(BdfGlyph {
-                character: glyph.encoding.unwrap(),
+                character,
                 bounding_box,
                 device_width: glyph.device_width.x as u32, // TODO: check cast and handle y?
                 start_index: data.len(),
