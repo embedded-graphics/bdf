@@ -157,7 +157,7 @@ impl Properties {
                 // Convert vector of properties into a HashMap
                 let properties = properties
                     .map(|p| p.iter().cloned().collect())
-                    .unwrap_or_else(HashMap::new);
+                    .unwrap_or_default();
 
                 Self { properties }
             },
