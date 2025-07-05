@@ -53,10 +53,14 @@ impl EgBdfOutput {
                 }
             };
 
+            // TODO: error handling
+            // TODO: use y coordinate or ensure y is zero
+            let device_width = u32::try_from(glyph.width_horizontal.unwrap().device.x).unwrap();
+
             glyphs.push(BdfGlyph {
                 character,
                 bounding_box,
-                device_width: glyph.device_width.x as u32, // TODO: check cast and handle y?
+                device_width,
                 start_index: data.len(),
             });
 
