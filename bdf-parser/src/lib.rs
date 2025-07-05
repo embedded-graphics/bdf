@@ -43,7 +43,7 @@ impl BdfFont {
         }
 
         let metadata = Metadata::parse(&mut lines)?;
-        let glyphs = Glyphs::parse(&mut lines)?;
+        let glyphs = Glyphs::parse(&mut lines, &metadata)?;
 
         Ok(BdfFont { metadata, glyphs })
     }
@@ -135,7 +135,7 @@ impl Coord {
 
 #[cfg(test)]
 mod tests {
-    use crate::properties::PropertyValue;
+    use crate::{glyph::GlyphWidth, properties::PropertyValue};
 
     use super::*;
     use indoc::indoc;
@@ -164,6 +164,7 @@ mod tests {
         CHARS 2
         STARTCHAR Char 0
         ENCODING 64
+        SWIDTH 480 0
         DWIDTH 8 0
         BBX 8 8 0 0
         BITMAP
@@ -172,6 +173,7 @@ mod tests {
         ENDCHAR
         STARTCHAR Char 1
         ENCODING 65
+        SWIDTH 480 0
         DWIDTH 8 0
         BBX 8 8 0 0
         BITMAP
@@ -219,8 +221,12 @@ mod tests {
                     },
                     encoding: Encoding::Standard(64), // '@'
                     name: "Char 0".to_string(),
-                    device_width: Coord::new(8, 0),
-                    scalable_width: None,
+                    width_horizontal: Some(GlyphWidth {
+                        device: Coord::new(8, 0),
+                        scalable: Coord::new(480, 0),
+                    }),
+                    width_vertical: None,
+                    origin_offset: None,
                 },
                 Glyph {
                     bitmap: vec![0x2f, 0x02],
@@ -230,8 +236,12 @@ mod tests {
                     },
                     encoding: Encoding::Standard(65), // 'A'
                     name: "Char 1".to_string(),
-                    device_width: Coord::new(8, 0),
-                    scalable_width: None,
+                    width_horizontal: Some(GlyphWidth {
+                        device: Coord::new(8, 0),
+                        scalable: Coord::new(480, 0),
+                    }),
+                    width_vertical: None,
+                    origin_offset: None,
                 },
             ],
         );
@@ -258,6 +268,17 @@ mod tests {
         let lines: Vec<_> = FONT
             .lines()
             .filter(|line| !line.contains("CHARS"))
+            .collect();
+        let input = lines.join("\n");
+
+        test_font(&BdfFont::parse(&input).unwrap());
+    }
+
+    #[test]
+    fn parse_font_missing_swidth() {
+        let lines: Vec<_> = FONT
+            .lines()
+            .filter(|line| !line.contains("SWIDTH"))
             .collect();
         let input = lines.join("\n");
 

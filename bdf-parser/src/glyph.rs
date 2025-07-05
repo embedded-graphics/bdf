@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use crate::{
     parser::{Line, Lines},
-    BoundingBox, Coord, ParserError,
+    BoundingBox, Coord, Metadata, ParserError,
 };
 
 /// Glyph encoding
@@ -17,25 +17,53 @@ pub enum Encoding {
     Unspecified,
 }
 
+/// Glyph width.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GlyphWidth {
+    /// Scalable width in 1/1000th of the size.
+    pub scalable: Coord,
+    /// Device width in device pixels.
+    pub device: Coord,
+}
+
 /// Glyph.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Glyph {
     /// Name.
+    ///
+    /// Specified by `STARTCHAR`.
     pub name: String,
 
     /// Encoding.
+    ///
+    /// Specified by `ENCODING`.
     pub encoding: Encoding,
 
-    /// Scalable width.
-    pub scalable_width: Option<Coord>,
+    /// Width for writing mode 0.
+    ///
+    /// Specified by `DWIDTH` and `SWIDTH` and used for `METRICSSET 0` and
+    /// `METRICSSET 2`.
+    pub width_horizontal: Option<GlyphWidth>,
 
-    /// Device width.
-    pub device_width: Coord,
+    /// Width for writing mode 1.
+    ///
+    /// Specified by `DWIDTH1` and `SWIDTH1` and used for `METRICSSET 1` and
+    /// `METRICSSET 2`.
+    pub width_vertical: Option<GlyphWidth>,
 
     /// Bounding box.
+    ///
+    /// Specified by `BBX`.
     pub bounding_box: BoundingBox,
 
+    /// Origin offset between writing mode 0 and 1.
+    ///
+    /// Specified by `VVECTOR`.
+    pub origin_offset: Option<Coord>,
+
     /// Bitmap data.
+    ///
+    /// Specified by the hex values between `BITMAP` and `ENDCHAR`.
     pub bitmap: Vec<u8>,
 }
 
@@ -57,15 +85,29 @@ fn parse_bitmap_row(line: &Line<'_>, bitmap: &mut Vec<u8>) -> Result<(), ()> {
     Ok(())
 }
 
+/// Approximate SWIDTH based on DWIDTH and the font metadata.
+fn calculate_swidth(device_width: Coord, metadata: &Metadata) -> Coord {
+    Coord {
+        x: device_width.x * 1000 * 72 / metadata.point_size / metadata.resolution.x,
+        y: device_width.y * 1000 * 72 / metadata.point_size / metadata.resolution.y,
+    }
+}
+
 impl Glyph {
-    pub(crate) fn parse(mut lines: &mut Lines<'_>) -> Result<Self, crate::ParserError> {
+    pub(crate) fn parse(
+        mut lines: &mut Lines<'_>,
+        metadata: &Metadata,
+    ) -> Result<Self, crate::ParserError> {
         let mut encoding = Encoding::Unspecified;
-        let mut scalable_width = None;
-        let mut device_width = Coord::new(0, 0);
-        let mut bounding_box = BoundingBox {
+        let mut swidth = None;
+        let mut dwidth = None;
+        let mut swidth1 = None;
+        let mut dwidth1 = None;
+        let mut bbx = BoundingBox {
             size: Coord::new(0, 0),
             offset: Coord::new(0, 0),
         };
+        let mut vvector = None;
 
         let start = lines.next().unwrap();
         assert_eq!(start.keyword, "STARTCHAR");
@@ -91,18 +133,38 @@ impl Glyph {
                     };
                 }
                 "SWIDTH" => {
-                    scalable_width = Some(
+                    swidth = Some(
                         Coord::parse(&line)
                             .ok_or_else(|| ParserError::with_line("invalid \"SWIDTH\"", &line))?,
                     );
                 }
                 "DWIDTH" => {
-                    device_width = Coord::parse(&line)
-                        .ok_or_else(|| ParserError::with_line("invalid \"DWIDTH\"", &line))?;
+                    dwidth = Some(
+                        Coord::parse(&line)
+                            .ok_or_else(|| ParserError::with_line("invalid \"DWIDTH\"", &line))?,
+                    );
+                }
+                "SWIDTH1" => {
+                    swidth1 = Some(
+                        Coord::parse(&line)
+                            .ok_or_else(|| ParserError::with_line("invalid \"SWIDTH1\"", &line))?,
+                    );
+                }
+                "DWIDTH1" => {
+                    dwidth1 = Some(
+                        Coord::parse(&line)
+                            .ok_or_else(|| ParserError::with_line("invalid \"DWIDTH1\"", &line))?,
+                    );
                 }
                 "BBX" => {
-                    bounding_box = BoundingBox::parse(&line)
+                    bbx = BoundingBox::parse(&line)
                         .ok_or_else(|| ParserError::with_line("invalid \"BBX\"", &line))?;
+                }
+                "VVECTOR" => {
+                    vvector = Some(
+                        Coord::parse(&line)
+                            .ok_or_else(|| ParserError::with_line("invalid \"VVECTOR\"", &line))?,
+                    );
                 }
                 "BITMAP" => {
                     break;
@@ -126,13 +188,42 @@ impl Glyph {
                 .map_err(|_| ParserError::with_line("invalid hex data in BITMAP", &line))?;
         }
 
+        let width_horizontal = if swidth.is_some() || dwidth.is_some() {
+            let device =
+                dwidth.ok_or_else(|| ParserError::with_line("missing \"DWIDTH\"", &start))?;
+
+            // According to the specs SWIDTH is required, but there are BDF
+            // files which are missing this value. The parser will try to
+            // approximate the value in this case.
+            let scalable = swidth.unwrap_or_else(|| calculate_swidth(device, metadata));
+
+            Some(GlyphWidth { scalable, device })
+        } else {
+            None
+        };
+
+        let width_vertical = if swidth1.is_some() || dwidth1.is_some() {
+            let device =
+                dwidth1.ok_or_else(|| ParserError::with_line("missing \"DWIDTH1\"", &start))?;
+
+            // According to the specs SWIDTH is required, but there are BDF
+            // files which are missing this value. The parser will try to
+            // approximate the value in this case.
+            let scalable = swidth1.unwrap_or_else(|| calculate_swidth(device, metadata));
+
+            Some(GlyphWidth { scalable, device })
+        } else {
+            None
+        };
+
         Ok(Self {
             name: name.to_string(),
             encoding,
-            scalable_width,
-            device_width,
-            bounding_box,
+            width_horizontal,
+            width_vertical,
+            bounding_box: bbx,
             bitmap,
+            origin_offset: vvector,
         })
     }
 
@@ -178,7 +269,7 @@ pub struct Glyphs {
 }
 
 impl Glyphs {
-    pub(crate) fn parse(lines: &mut Lines<'_>) -> Result<Self, ParserError> {
+    pub(crate) fn parse(lines: &mut Lines<'_>, metadata: &Metadata) -> Result<Self, ParserError> {
         let mut glyphs = Vec::new();
 
         while let Some(line) = lines.next() {
@@ -188,7 +279,7 @@ impl Glyphs {
                 }
                 "STARTCHAR" => {
                     lines.backtrack(line);
-                    glyphs.push(Glyph::parse(lines)?);
+                    glyphs.push(Glyph::parse(lines, metadata)?);
                 }
                 "ENDFONT" => {
                     break;
@@ -228,18 +319,31 @@ impl Glyphs {
 
 #[cfg(test)]
 mod tests {
+    use crate::Properties;
+
     use super::*;
     use indoc::indoc;
+
+    fn mock_metadata() -> Metadata {
+        Metadata {
+            name: "test".to_string(),
+            point_size: 16,
+            resolution: Coord::new(100, 100),
+            bounding_box: BoundingBox::default(),
+            metrics_set: crate::MetricsSet::Horizontal,
+            properties: Properties::default(),
+        }
+    }
 
     #[track_caller]
     fn parse_glyph(input: &str) -> Glyph {
         let mut lines = Lines::new(input);
-        Glyph::parse(&mut lines).unwrap()
+        Glyph::parse(&mut lines, &mock_metadata()).unwrap()
     }
 
     #[test]
     fn test_parse_bitmap() {
-        let prefix = "STARTCHAR 0\nBITMAP\n";
+        let prefix = "STARTCHAR 0\nSWIDTH 0 0\nDWIDTH 0 0\nBITMAP\n";
         let suffix = "\nENDCHAR";
 
         for (input, expected) in [
@@ -307,8 +411,12 @@ mod tests {
                     size: Coord::new(8, 16),
                     offset: Coord::new(0, -2),
                 },
-                scalable_width: Some(Coord::new(500, 0)),
-                device_width: Coord::new(8, 0),
+                width_horizontal: Some(GlyphWidth {
+                    scalable: Coord::new(500, 0),
+                    device: Coord::new(8, 0),
+                }),
+                width_vertical: None,
+                origin_offset: None,
             },
         )
     }
@@ -325,7 +433,7 @@ mod tests {
 
         let mut lines = Lines::new(chardata);
 
-        let glyphs = Glyphs::parse(&mut lines).unwrap();
+        let glyphs = Glyphs::parse(&mut lines, &mock_metadata()).unwrap();
         assert_eq!(glyphs.get('A'), Some(&expected_glyph));
     }
 
@@ -433,8 +541,12 @@ mod tests {
                 },
                 encoding: Encoding::Unspecified,
                 name: "000".to_string(),
-                scalable_width: Some(Coord::new(432, 0)),
-                device_width: Coord::new(6, 0),
+                width_horizontal: Some(GlyphWidth {
+                    scalable: Coord::new(432, 0),
+                    device: Coord::new(6, 0),
+                }),
+                width_vertical: None,
+                origin_offset: None,
             }
         );
     }
@@ -461,8 +573,45 @@ mod tests {
                 },
                 encoding: Encoding::NonStandard(123),
                 name: "000".to_string(),
-                scalable_width: Some(Coord::new(432, 0)),
-                device_width: Coord::new(6, 0),
+                width_horizontal: Some(GlyphWidth {
+                    scalable: Coord::new(432, 0),
+                    device: Coord::new(6, 0),
+                }),
+                width_vertical: None,
+                origin_offset: None,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_glyph_with_writing_mode1_metrics() {
+        let chardata = indoc! {r#"
+            STARTCHAR 000
+            ENCODING -1
+            SWIDTH1 0 432
+            DWIDTH1 0 6
+            VVECTOR 1 2
+            BBX 0 0 0 0
+            BITMAP
+            ENDCHAR
+        "#};
+
+        assert_eq!(
+            parse_glyph(chardata),
+            Glyph {
+                bitmap: vec![],
+                bounding_box: BoundingBox {
+                    size: Coord::new(0, 0),
+                    offset: Coord::new(0, 0),
+                },
+                encoding: Encoding::Unspecified,
+                name: "000".to_string(),
+                width_horizontal: None,
+                width_vertical: Some(GlyphWidth {
+                    scalable: Coord::new(0, 432),
+                    device: Coord::new(0, 6),
+                }),
+                origin_offset: Some(Coord::new(1, 2)),
             }
         );
     }
@@ -489,8 +638,12 @@ mod tests {
                 },
                 encoding: Encoding::Standard(0),
                 name: "000".to_string(),
-                scalable_width: Some(Coord::new(432, 0)),
-                device_width: Coord::new(6, 0),
+                width_horizontal: Some(GlyphWidth {
+                    scalable: Coord::new(432, 0),
+                    device: Coord::new(6, 0),
+                }),
+                width_vertical: None,
+                origin_offset: None,
             }
         );
     }
