@@ -29,7 +29,7 @@ fn try_main() -> Result<()> {
         .nth(1)
         .ok_or_else(|| anyhow!("missing filename"))?;
 
-    let output = FontConverter::new(&file, "BDF_FILE")
+    let output = FontConverter::with_file(&file, "BDF_FILE")
         .glyphs(Mapping::Ascii)
         .missing_glyph_substitute('?')
         .convert_eg_bdf()

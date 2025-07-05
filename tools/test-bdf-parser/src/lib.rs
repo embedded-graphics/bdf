@@ -31,7 +31,8 @@ pub fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 
 pub fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let bdf = std::fs::read(filepath).unwrap();
-    let font = BdfFont::parse(&bdf);
+    let str = String::from_utf8_lossy(&bdf);
+    let font = BdfFont::parse(&str);
 
     match font {
         Ok(_font) => Ok(()),

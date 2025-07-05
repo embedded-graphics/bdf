@@ -75,7 +75,7 @@ fn convert(args: &Args) -> Result<()> {
     let bdf_file = args.bdf_file.as_ref().unwrap();
     let name = args.name.as_ref().unwrap();
 
-    let mut converter = FontConverter::new(bdf_file, name)
+    let mut converter = FontConverter::with_file(bdf_file, name)
         .embedded_graphics_crate_path(&args.embedded_graphics_crate_path);
 
     if let Some(mapping) = args.mapping {
