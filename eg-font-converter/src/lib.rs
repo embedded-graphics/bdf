@@ -72,7 +72,7 @@
 #![deny(unsafe_code)]
 
 use anyhow::{anyhow, ensure, Context, Result};
-use bdf_parser::{BdfFont as ParserBdfFont, Encoding, Glyph, Property};
+use bdf_parser::{Encoding, Font, Glyph, Property};
 use embedded_graphics::mono_font::mapping::GlyphMapping;
 use std::{
     collections::BTreeSet,
@@ -252,7 +252,7 @@ impl<'a> FontConverter<'a> {
         self
     }
 
-    fn convert(&self) -> Result<Font> {
+    fn convert(&self) -> Result<ConvertedFont> {
         ensure!(
             is_valid_identifier(&self.name),
             "name is not a valid Rust identifier: {}",
@@ -265,9 +265,9 @@ impl<'a> FontConverter<'a> {
                     .with_context(|| format!("couldn't read BDF file from {file:?}"))?;
 
                 let str = String::from_utf8_lossy(&data);
-                ParserBdfFont::parse(&str)
+                Font::parse(&str)
             }
-            FileOrString::String(str) => ParserBdfFont::parse(str),
+            FileOrString::String(str) => Font::parse(str),
         }
         .with_context(|| "couldn't parse BDF file".to_string())?;
 
@@ -328,7 +328,7 @@ impl<'a> FontConverter<'a> {
         let strikethrough_position = (ascent + descent) / 2;
         let strikethrough_thickness = 1;
 
-        let mut font = Font {
+        let mut font = ConvertedFont {
             bdf,
             name: self.name.clone(),
             file_stem: self.file_stem.clone(),
@@ -389,8 +389,8 @@ fn is_valid_identifier(ident: &str) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-struct Font {
-    pub bdf: ParserBdfFont,
+struct ConvertedFont {
+    pub bdf: Font,
     pub name: String,
     pub file_stem: String,
     pub constant_visibility: Visibility,
@@ -411,7 +411,7 @@ struct Font {
     pub strikethrough_thickness: u32,
 }
 
-impl Font {
+impl ConvertedFont {
     fn glyph_index(&self, c: char) -> Option<usize> {
         // TODO: assumes unicode
         let encoding = Encoding::Standard(c as u32);
@@ -443,7 +443,7 @@ impl Font {
     }
 }
 
-impl GlyphMapping for Font {
+impl GlyphMapping for ConvertedFont {
     fn index(&self, c: char) -> usize {
         // TODO: assumes unicode
         let encoding = Encoding::Standard(c as u32);

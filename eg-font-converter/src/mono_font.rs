@@ -1,7 +1,7 @@
 use std::{fs, io, ops::RangeInclusive, path::Path};
 
 use anyhow::{bail, Context, Result};
-use bdf_parser::{BdfFont as ParserBdfFont, Encoding, Glyph};
+use bdf_parser::{Encoding, Font, Glyph};
 use eg_bdf::BdfTextStyle;
 use embedded_graphics::{
     image::ImageRaw,
@@ -13,12 +13,12 @@ use embedded_graphics::{
 use embedded_graphics_simulator::{OutputSettings, SimulatorDisplay};
 use quote::{format_ident, quote};
 
-use crate::{EgBdfOutput, Font};
+use crate::{ConvertedFont, EgBdfOutput};
 
 /// Font conversion output for [`MonoFont`].
 #[derive(Debug)]
 pub struct MonoFontOutput {
-    font: Font,
+    font: ConvertedFont,
     bitmap: SimulatorDisplay<BinaryColor>,
     data: Vec<u8>,
 
@@ -207,7 +207,7 @@ impl MonoFontOutput {
     }
 
     /// Returns the BDF file.
-    pub fn bdf(&self) -> &ParserBdfFont {
+    pub fn bdf(&self) -> &Font {
         &self.font.bdf
     }
 

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bdf_parser::*;
+use bdf_parser::Font;
 
 pub fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -32,7 +32,7 @@ pub fn collect_font_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
 pub fn test_font_parse(filepath: &Path) -> Result<(), String> {
     let bdf = std::fs::read(filepath).unwrap();
     let str = String::from_utf8_lossy(&bdf);
-    let font = BdfFont::parse(&str);
+    let font = Font::parse(&str);
 
     match font {
         Ok(_font) => Ok(()),
