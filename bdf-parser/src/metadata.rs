@@ -128,7 +128,7 @@ mod tests {
     use indoc::indoc;
 
     use super::*;
-    use crate::{tests::assert_parser_error, BdfFont};
+    use crate::{tests::assert_parser_error, Font};
 
     #[test]
     fn complete_metadata() {
@@ -142,7 +142,7 @@ mod tests {
             ENDFONT
         "#};
 
-        BdfFont::parse(FONT).unwrap();
+        Font::parse(FONT).unwrap();
     }
 
     #[test]
@@ -197,7 +197,7 @@ mod tests {
             ENDFONT
         "#};
 
-        let font = BdfFont::parse(FONT).unwrap();
+        let font = Font::parse(FONT).unwrap();
         assert_eq!(font.metadata.metrics_set, MetricsSet::Both);
     }
 }

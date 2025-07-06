@@ -18,7 +18,7 @@ use crate::parser::{Line, Lines};
 
 /// BDF Font.
 #[derive(Debug, Clone, PartialEq)]
-pub struct BdfFont {
+pub struct Font {
     /// Font metadata.
     pub metadata: Metadata,
 
@@ -26,7 +26,7 @@ pub struct BdfFont {
     pub glyphs: Glyphs,
 }
 
-impl BdfFont {
+impl Font {
     /// Parses a BDF file.
     pub fn parse(input: &str) -> Result<Self, ParserError> {
         let mut lines = Lines::new(input);
@@ -45,7 +45,7 @@ impl BdfFont {
         let metadata = Metadata::parse(&mut lines)?;
         let glyphs = Glyphs::parse(&mut lines, &metadata)?;
 
-        Ok(BdfFont { metadata, glyphs })
+        Ok(Font { metadata, glyphs })
     }
 }
 
@@ -143,7 +143,7 @@ mod tests {
     #[track_caller]
     pub(crate) fn assert_parser_error(input: &str, message: &str, line_number: Option<usize>) {
         assert_eq!(
-            BdfFont::parse(input),
+            Font::parse(input),
             Err(ParserError {
                 message: message.to_string(),
                 line_number,
@@ -183,7 +183,7 @@ mod tests {
         ENDFONT
     "#};
 
-    fn test_font(font: &BdfFont) {
+    fn test_font(font: &Font) {
         assert_eq!(
             font.metadata,
             Metadata {
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn parse_font() {
-        test_font(&BdfFont::parse(FONT).unwrap())
+        test_font(&Font::parse(FONT).unwrap())
     }
 
     #[test]
@@ -260,7 +260,7 @@ mod tests {
             .collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(&input).unwrap());
+        test_font(&Font::parse(&input).unwrap());
     }
 
     #[test]
@@ -271,7 +271,7 @@ mod tests {
             .collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(&input).unwrap());
+        test_font(&Font::parse(&input).unwrap());
     }
 
     #[test]
@@ -282,7 +282,7 @@ mod tests {
             .collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(&input).unwrap());
+        test_font(&Font::parse(&input).unwrap());
     }
 
     #[test]
@@ -290,7 +290,7 @@ mod tests {
         let lines: Vec<_> = FONT.lines().collect();
         let input = lines.join("\r\n");
 
-        test_font(&BdfFont::parse(&input).unwrap());
+        test_font(&Font::parse(&input).unwrap());
     }
 
     #[test]
@@ -313,7 +313,7 @@ mod tests {
         let lines: Vec<_> = std::iter::once("").chain(FONT.lines()).collect();
         let input = lines.join("\n");
 
-        test_font(&BdfFont::parse(&input).unwrap());
+        test_font(&Font::parse(&input).unwrap());
     }
 
     #[test]

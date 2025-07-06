@@ -10,7 +10,7 @@ use embedded_graphics::{
 };
 use quote::{format_ident, quote};
 
-use crate::Font;
+use crate::ConvertedFont;
 
 /// Converts a BDF bounding box into an embedded-graphics rectangle.
 pub fn bounding_box_to_rectangle(bounding_box: &BoundingBox) -> Rectangle {
@@ -29,14 +29,14 @@ pub fn bounding_box_to_rectangle(bounding_box: &BoundingBox) -> Rectangle {
 /// [`eg-bdf`]: eg_bdf
 #[derive(Debug)]
 pub struct EgBdfOutput {
-    pub(crate) font: Font,
+    pub(crate) font: ConvertedFont,
     data: BitVec<u8, Msb0>,
     glyphs: Vec<BdfGlyph>,
     bounding_box: Rectangle,
 }
 
 impl EgBdfOutput {
-    pub(crate) fn new(font: Font) -> Result<Self> {
+    pub(crate) fn new(font: ConvertedFont) -> Result<Self> {
         let mut data = BitVec::<u8, Msb0>::new();
         let mut glyphs = Vec::new();
         let bounding_box = bounding_box_to_rectangle(&font.bdf.metadata.bounding_box);
@@ -83,7 +83,7 @@ impl EgBdfOutput {
     fn try_rust(&self) -> Result<String> {
         let constant_name = format_ident!("{}", self.font.name);
         let data_file = self.font.data_file().to_string_lossy().to_string();
-        let Font {
+        let ConvertedFont {
             replacement_character,
             ascent,
             descent,
