@@ -448,12 +448,13 @@ impl GlyphMapping for ConvertedFont {
         // TODO: assumes unicode
         let encoding = Encoding::Standard(c as u32);
 
+        // TODO: support replacement character
         self.glyphs
             .iter()
             .enumerate()
             .find(|(_, glyph)| glyph.encoding == encoding)
             .map(|(index, _)| index)
-            .unwrap()
+            .unwrap_or_default()
     }
 }
 
