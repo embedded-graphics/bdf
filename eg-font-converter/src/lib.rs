@@ -312,7 +312,7 @@ impl<'a> FontConverter<'a> {
             .try_get::<i32>(Property::FontAscent)
             .ok()
             .filter(|v| *v >= 0)
-            .unwrap() as u32; //TODO: convert to error
+            .unwrap_or_default() as u32; //TODO: convert to error
 
         let descent = bdf
             .metadata
@@ -320,7 +320,7 @@ impl<'a> FontConverter<'a> {
             .try_get::<i32>(Property::FontDescent)
             .ok()
             .filter(|v| *v >= 0)
-            .unwrap() as u32; //TODO: convert to error
+            .unwrap_or_default() as u32; //TODO: convert to error
 
         // TODO: read from BDF and use correct fallbacks (https://www.x.org/docs/XLFD/xlfd.pdf 3.2.30)
         let underline_position = ascent + 1;
