@@ -1,7 +1,7 @@
 use std::{fs, io, path::Path};
 
 use anyhow::Result;
-use bdf_parser::{BoundingBox, Encoding};
+use bdf_parser::{BoundingBox, Encoding, Metrics};
 use bitvec::{prelude::*, vec::BitVec};
 use eg_bdf::{BdfFont, BdfGlyph};
 use embedded_graphics::{
@@ -84,11 +84,14 @@ impl EgBdfOutput {
         let constant_name = format_ident!("{}", self.font.name);
         let data_file = self.font.data_file().to_string_lossy().to_string();
         let ConvertedFont {
+            bdf,
             replacement_character,
-            ascent,
-            descent,
             ..
-        } = self.font;
+        } = &self.font;
+
+        let Metrics {
+            ascent, descent, ..
+        } = bdf.metrics;
 
         let glyphs = self.glyphs.iter().map(|glyph| {
             let BdfGlyph {
@@ -150,10 +153,12 @@ impl EgBdfOutput {
 
     /// Returns the converted font as a [`BdfFont`].
     pub fn as_font(&self) -> BdfFont<'_> {
+        let metrics = &self.font.bdf.metrics;
+
         BdfFont {
             replacement_character: self.font.replacement_character,
-            ascent: self.font.ascent,
-            descent: self.font.descent,
+            ascent: metrics.ascent,
+            descent: metrics.descent,
             glyphs: &self.glyphs,
             data: self.data(),
         }

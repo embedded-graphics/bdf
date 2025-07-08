@@ -12,7 +12,7 @@ mod properties;
 pub use glyph::{Encoding, Glyph, Glyphs};
 pub use metadata::{Metadata, MetricsSet};
 pub use parser::ParserError;
-pub use properties::{Properties, Property, PropertyError, PropertyType};
+pub use properties::{Properties, Property, PropertyType};
 
 use crate::parser::{Line, Lines};
 
@@ -24,6 +24,9 @@ pub struct Font {
 
     /// Glyphs.
     pub glyphs: Glyphs,
+
+    /// Metrics.
+    pub metrics: Metrics,
 }
 
 impl Font {
@@ -44,8 +47,13 @@ impl Font {
 
         let metadata = Metadata::parse(&mut lines)?;
         let glyphs = Glyphs::parse(&mut lines, &metadata)?;
+        let metrics = Metrics::new(&metadata, &glyphs)?;
 
-        Ok(Font { metadata, glyphs })
+        Ok(Font {
+            metadata,
+            glyphs,
+            metrics,
+        })
     }
 }
 
@@ -130,6 +138,39 @@ impl Coord {
         let [x, y] = line.parse_integer_parameters()?;
 
         Some(Self { x, y })
+    }
+}
+
+/// Metrics.
+#[derive(Debug, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Metrics {
+    /// Ascent above the baseline in pixels.
+    pub ascent: u32,
+
+    /// Descent above the baseline in pixels.
+    pub descent: u32,
+}
+
+impl Metrics {
+    fn new(metadata: &Metadata, glyphs: &Glyphs) -> Result<Self, ParserError> {
+        let ascent = metadata
+            .properties
+            .try_get::<u32>(Property::FontAscent)
+            .map_err(|_| ParserError::new("invalid value for FONT_ASCENT property"))?
+            .unwrap_or_else(|| glyphs.approximate_ascent());
+
+        let descent = metadata
+            .properties
+            .try_get::<u32>(Property::FontDescent)
+            .map_err(|_| ParserError::new("invalid value for FONT_DESCENT property"))?
+            .unwrap_or_else(|| glyphs.approximate_descent());
+
+        Ok(Self { ascent, descent })
+    }
+
+    /// Gets the line height in pixels.
+    pub const fn line_height(&self) -> u32 {
+        self.ascent + self.descent
     }
 }
 

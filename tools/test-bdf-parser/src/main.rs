@@ -36,10 +36,9 @@ fn draw_specimen(style: impl TextRenderer<Color = Rgb888> + Copy) -> SimulatorDi
         Baseline::Top,
     );
 
-    // 10 px minimum line height to ensure output even if metrics are wrong.
-    let single_line_height = single_line.bounding_box().size.height.max(10);
+    let single_line_height = single_line.bounding_box().size.height;
 
-    let display_height = single_line_height * 3;
+    let display_height = (single_line_height * 3).max(10);
     let display_width = (single_line.bounding_box().size.width + 10).max(display_height);
 
     let text_position = Point::new(5, single_line_height as i32);
