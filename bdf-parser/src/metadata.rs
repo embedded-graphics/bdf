@@ -138,7 +138,10 @@ mod tests {
             FONTBOUNDINGBOX 0 1 2 3
             SIZE 1 2 3
             COMMENT "comment"
-            CHARS 0
+            CHARS 1
+            STARTCHAR 0
+            BITMAP
+            ENDCHAR
             ENDFONT
         "#};
 
@@ -193,7 +196,10 @@ mod tests {
             SIZE 1 2 3
             COMMENT "comment"
             METRICSSET 2
-            CHARS 0
+            CHARS 1
+            STARTCHAR 0
+            BITMAP
+            ENDCHAR
             ENDFONT
         "#};
 

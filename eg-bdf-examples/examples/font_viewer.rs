@@ -105,19 +105,19 @@ fn try_main() -> Result<()> {
         .nth(1)
         .ok_or_else(|| anyhow!("missing filename"))?;
 
-    let converted_font = FontConverter::with_file(&file, "BDF_FILE")
+    let converter = FontConverter::with_file(&file, "BDF_FILE")
         .glyphs(Mapping::Ascii)
         .missing_glyph_substitute('?');
 
-    let output = converted_font
+    let bdf_output = converter
         .convert_eg_bdf()
         .with_context(|| "couldn't convert font")?;
-    let bdf_font = output.as_font();
+    let bdf_font = bdf_output.as_font();
 
-    let output = converted_font
+    let mono_output = converter
         .convert_mono_font()
         .with_context(|| "couldn't convert font")?;
-    let mono_font = output.as_font();
+    let mono_font = mono_output.as_font();
 
     let hints_style = MonoTextStyle::new(&FONT_6X10, Rgb888::CSS_DIM_GRAY);
     let bottom_right = TextStyleBuilder::new()
@@ -125,7 +125,6 @@ fn try_main() -> Result<()> {
         .alignment(Alignment::Right)
         .build();
 
-    // TODO: add metrics getter
     let line_height = bdf_font.ascent + bdf_font.descent;
     let display_height = line_height * 8;
     let display_width = (line_height * 25).max(display_height);

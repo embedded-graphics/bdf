@@ -72,7 +72,7 @@
 #![deny(unsafe_code)]
 
 use anyhow::{anyhow, ensure, Context, Result};
-use bdf_parser::{Encoding, Font, Glyph, Property};
+use bdf_parser::{Encoding, Font, Glyph};
 use embedded_graphics::mono_font::mapping::GlyphMapping;
 use std::{
     collections::BTreeSet,
@@ -305,27 +305,10 @@ impl<'a> FontConverter<'a> {
                 .collect::<Result<Vec<_>, _>>()?
         };
 
-        // TODO: handle missing (incorrect?) properties
-        let ascent = bdf
-            .metadata
-            .properties
-            .try_get::<i32>(Property::FontAscent)
-            .ok()
-            .filter(|v| *v >= 0)
-            .unwrap_or_default() as u32; //TODO: convert to error
-
-        let descent = bdf
-            .metadata
-            .properties
-            .try_get::<i32>(Property::FontDescent)
-            .ok()
-            .filter(|v| *v >= 0)
-            .unwrap_or_default() as u32; //TODO: convert to error
-
         // TODO: read from BDF and use correct fallbacks (https://www.x.org/docs/XLFD/xlfd.pdf 3.2.30)
-        let underline_position = ascent + 1;
+        let underline_position = bdf.metrics.ascent + 1;
         let underline_thickness = 1;
-        let strikethrough_position = (ascent + descent) / 2;
+        let strikethrough_position = bdf.metrics.line_height() / 2;
         let strikethrough_thickness = 1;
 
         let mut font = ConvertedFont {
@@ -339,8 +322,6 @@ impl<'a> FontConverter<'a> {
             data_file_extension: self.data_file_extension.clone(),
             data_file_path: self.data_file_path.clone(),
             comments: self.comments.clone(),
-            ascent,
-            descent,
             underline_position,
             underline_thickness,
             strikethrough_position,
@@ -401,9 +382,6 @@ struct ConvertedFont {
 
     pub glyphs: Vec<Glyph>,
     pub replacement_character: usize,
-
-    pub ascent: u32,
-    pub descent: u32,
 
     pub underline_position: u32,
     pub underline_thickness: u32,

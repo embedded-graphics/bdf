@@ -176,19 +176,25 @@ impl Properties {
 
     /// Tries to get a property.
     ///
-    /// Returns an error if the property doesn't exist or the value has the wrong type.
-    pub fn try_get<T: PropertyType>(&self, property: Property) -> Result<T, PropertyError> {
+    /// Returns `None` if the property doesn't exits and an error if the value has the wrong type.
+    pub fn try_get<T: PropertyType>(
+        &self,
+        property: Property,
+    ) -> Result<Option<T>, PropertyTypeError> {
         self.try_get_by_name(&property.to_string())
     }
 
     /// Tries to get a property by name.
     ///
-    /// Returns an error if the property doesn't exist or the value has the wrong type.
-    pub fn try_get_by_name<T: PropertyType>(&self, name: &str) -> Result<T, PropertyError> {
+    /// Returns `None` if the property doesn't exits and an error if the value has the wrong type.
+    pub fn try_get_by_name<T: PropertyType>(
+        &self,
+        name: &str,
+    ) -> Result<Option<T>, PropertyTypeError> {
         self.properties
             .get(name)
-            .ok_or_else(|| PropertyError::Undefined(name.to_string()))
-            .and_then(TryFrom::try_from)
+            .map(|value| value.try_into())
+            .transpose()
     }
 
     /// Returns `true` if no properties exist.
@@ -200,12 +206,13 @@ impl Properties {
 /// Marker trait for property value types.
 pub trait PropertyType
 where
-    Self: for<'a> TryFrom<&'a PropertyValue, Error = PropertyError>,
+    Self: for<'a> TryFrom<&'a PropertyValue, Error = PropertyTypeError>,
 {
 }
 
 impl PropertyType for String {}
 impl PropertyType for i32 {}
+impl PropertyType for u32 {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyValue {
@@ -214,37 +221,42 @@ pub enum PropertyValue {
 }
 
 impl TryFrom<&PropertyValue> for String {
-    type Error = PropertyError;
+    type Error = PropertyTypeError;
 
     fn try_from(value: &PropertyValue) -> Result<Self, Self::Error> {
         match value {
             PropertyValue::Text(text) => Ok(text.clone()),
-            _ => Err(PropertyError::WrongType),
+            _ => Err(PropertyTypeError),
         }
     }
 }
 
 impl TryFrom<&PropertyValue> for i32 {
-    type Error = PropertyError;
+    type Error = PropertyTypeError;
 
     fn try_from(value: &PropertyValue) -> Result<Self, Self::Error> {
         match value {
             PropertyValue::Int(int) => Ok(*int),
-            _ => Err(PropertyError::WrongType),
+            _ => Err(PropertyTypeError),
         }
     }
 }
 
-/// Error returned by property getters.
-#[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PropertyError {
-    /// Undefined property.
-    #[error("property \"{0}\" is undefined")]
-    Undefined(String),
-    /// Wrong property type.
-    #[error("wrong property type")]
-    WrongType,
+impl TryFrom<&PropertyValue> for u32 {
+    type Error = PropertyTypeError;
+
+    fn try_from(value: &PropertyValue) -> Result<Self, Self::Error> {
+        match value {
+            PropertyValue::Int(int) if *int >= 0 => Ok(*int as u32),
+            _ => Err(PropertyTypeError),
+        }
+    }
 }
+
+/// Invalid property type error.
+#[derive(Debug, Error, PartialEq, Eq, PartialOrd, Ord)]
+#[error("invalid property type")]
+pub struct PropertyTypeError;
 
 #[cfg(test)]
 mod tests {
@@ -271,7 +283,7 @@ mod tests {
         ] {
             assert_eq!(
                 properties.try_get_by_name::<String>(key).unwrap(),
-                expected.to_string(),
+                Some(expected.to_string()),
                 "key=\"{key}\""
             );
         }
@@ -289,16 +301,19 @@ mod tests {
         let mut lines = Lines::new(INPUT);
         let properties = Properties::parse(&mut lines).unwrap();
 
-        for (key, expected) in [
-            ("POS_INT", 10), //
-            ("NEG_INT", -20),
-        ] {
-            assert_eq!(
-                properties.try_get_by_name::<i32>(key).unwrap(),
-                expected,
-                "key=\"{key}\""
-            );
-        }
+        assert_eq!(properties.try_get_by_name::<i32>("POS_INT"), Ok(Some(10)));
+        assert_eq!(properties.try_get_by_name::<i32>("NEG_INT"), Ok(Some(-20)));
+
+        assert_eq!(properties.try_get_by_name::<u32>("POS_INT"), Ok(Some(10)));
+        assert_eq!(
+            properties.try_get_by_name::<u32>("NEG_INT"),
+            Err(PropertyTypeError)
+        );
+
+        assert_eq!(
+            properties.try_get_by_name::<String>("POS_INT"),
+            Err(PropertyTypeError)
+        );
     }
 
     #[test]

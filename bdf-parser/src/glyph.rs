@@ -293,6 +293,10 @@ impl Glyphs {
             }
         }
 
+        if glyphs.is_empty() {
+            return Err(ParserError::new("no CHARS in font"));
+        }
+
         Ok(Self { glyphs })
     }
 
@@ -314,6 +318,32 @@ impl Glyphs {
     /// Returns an iterator over all glyphs.
     pub fn iter(&self) -> impl Iterator<Item = &Glyph> {
         self.glyphs.iter()
+    }
+
+    /// Approximates the ascent.
+    ///
+    /// See section 8.2.1 FONT_ASCENT in https://www.x.org/docs/XLFD/xlfd.pdf.
+    pub(crate) fn approximate_ascent(&self) -> u32 {
+        self.glyphs
+            .iter()
+            .map(|glyph| glyph.bounding_box.size.y - glyph.bounding_box.offset.y)
+            .max()
+            .unwrap_or_default()
+            .try_into()
+            .unwrap()
+    }
+
+    /// Approximates the descent.
+    ///
+    /// See section 8.2.2 FONT_DESCENT in https://www.x.org/docs/XLFD/xlfd.pdf.
+    pub(crate) fn approximate_descent(&self) -> u32 {
+        self.glyphs
+            .iter()
+            .map(|glyph| -glyph.bounding_box.offset.y)
+            .max()
+            .unwrap_or_default()
+            .try_into()
+            .unwrap()
     }
 }
 

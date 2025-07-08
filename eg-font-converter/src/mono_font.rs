@@ -35,6 +35,7 @@ pub struct MonoFontOutput {
 impl MonoFontOutput {
     pub(crate) fn new(bdf: EgBdfOutput) -> Result<Self> {
         let font = bdf.as_font();
+        let metrics = &bdf.font.bdf.metrics;
         let style = BdfTextStyle::new(&font, BinaryColor::On);
 
         let glyphs_per_row = 16; //TODO: make configurable
@@ -43,7 +44,7 @@ impl MonoFontOutput {
 
         let character_size = bdf.bounding_box().size;
         let character_spacing = 0;
-        let baseline = bdf.font.ascent.saturating_sub(1);
+        let baseline = metrics.ascent.saturating_sub(1);
         let strikethrough = DecorationDimensions::new(
             bdf.font.strikethrough_position,
             bdf.font.strikethrough_thickness,
