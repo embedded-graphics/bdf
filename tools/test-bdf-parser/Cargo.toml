@@ -6,4 +6,10 @@ edition = "2018"
 
 [dependencies]
 bdf-parser = { path = "../../bdf-parser" }
+eg-bdf = { path = "../../eg-bdf" }
+eg-font-converter = { path = "../../eg-font-converter" }
+owo-colors = "4.2.2"
 clap = { version = "4.5.40", features = [ "derive" ] }
+anyhow = "1.0.98"
+embedded-graphics = "0.8.1"
+embedded-graphics-simulator = { version = "0.7.0", default-features = false }
