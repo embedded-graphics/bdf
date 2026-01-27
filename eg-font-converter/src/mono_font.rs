@@ -42,9 +42,35 @@ impl MonoFontOutput {
         let columns = glyphs_per_row; // TODO: allow smaller column count
         let rows = font.glyphs.len().div_ceil(glyphs_per_row);
 
-        let character_size = bdf.bounding_box().size;
+        let bounding_box = bdf.bounding_box().size;
         let character_spacing = 0;
-        let baseline = metrics.ascent.saturating_sub(1);
+
+        // Calculate the actual maximum glyph extent above the baseline.
+        // Some fonts have glyphs (e.g., accented capitals) that extend beyond
+        // the nominal FONT_ASCENT, so we need to accommodate them.
+        let max_glyph_ascent = bdf
+            .font
+            .glyphs
+            .iter()
+            .filter_map(|g| {
+                matches!(g.encoding, Encoding::Standard(_))
+                    .then_some(g.bounding_box.offset.y + g.bounding_box.size.y)
+            })
+            .max()
+            .unwrap_or(0) as u32;
+
+        let actual_ascent = max_glyph_ascent.max(metrics.ascent);
+        let baseline = actual_ascent.saturating_sub(1);
+
+        // Character height must fit all glyphs. Use the larger of the font's nominal height
+        // (ascent + descent) or the actual maximum glyph extent.
+        let min_height = actual_ascent + metrics.descent;
+        let character_size = Size::new(bounding_box.width, min_height);
+
+        // BdfTextStyle uses metrics.ascent for positioning, but we sized cells
+        // for actual_ascent. Offset rendering to account for the difference.
+        let y_offset = (actual_ascent - metrics.ascent) as i32;
+
         let strikethrough = DecorationDimensions::new(
             bdf.font.strikethrough_position,
             bdf.font.strikethrough_thickness,
@@ -90,9 +116,14 @@ impl MonoFontOutput {
                 _ => bail!("invalid encoding: '{:?}'", glyph.encoding),
             };
 
-            Text::with_baseline(&String::from(c), Point::new(x, y), style, Baseline::Top)
-                .draw(&mut bitmap)
-                .unwrap();
+            Text::with_baseline(
+                &String::from(c),
+                Point::new(x, y + y_offset),
+                style,
+                Baseline::Top,
+            )
+            .draw(&mut bitmap)
+            .unwrap();
         }
 
         let data = bitmap.to_be_bytes();
