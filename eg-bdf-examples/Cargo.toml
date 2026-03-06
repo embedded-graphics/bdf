@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 embedded-graphics = "0.8.1"
-embedded-graphics-simulator = "0.7.0"
+embedded-graphics-simulator = "0.8.0"
 # TODO: add non path dependency
 eg-bdf = { path = "../eg-bdf" }
 eg-font-converter = { path = "../eg-font-converter" }
