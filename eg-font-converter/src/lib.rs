@@ -278,12 +278,15 @@ impl<'a> FontConverter<'a> {
                 .iter()
                 .copied()
                 .map(|c| {
-                    let glyph_c =
-                        if bdf.glyphs.get(c).is_none() && self.missing_glyph_substitute.is_some() {
-                            self.missing_glyph_substitute.unwrap()
-                        } else {
+                    let glyph_c = if let Some(substitute) = self.missing_glyph_substitute {
+                        if bdf.glyphs.get(c).is_some() {
                             c
-                        };
+                        } else {
+                            substitute
+                        }
+                    } else {
+                        c
+                    };
 
                     bdf.glyphs
                         .get(glyph_c)

@@ -68,7 +68,7 @@ pub struct Glyph {
 }
 
 fn parse_bitmap_row(line: &Line<'_>, bitmap: &mut Vec<u8>) -> Result<(), ()> {
-    if !line.parameters.is_empty() || line.keyword.len() % 2 != 0 {
+    if !line.parameters.is_empty() || !line.keyword.len().is_multiple_of(2) {
         return Err(());
     }
 

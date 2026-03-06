@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
-use clap::{command, Parser};
+use clap::Parser;
 use eg_font_converter::FontConverter;
 use embedded_graphics::mono_font::mapping::Mapping;
 
