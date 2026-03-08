@@ -1,19 +1,20 @@
 use std::{fs, io, ops::RangeInclusive, path::Path};
 
-use anyhow::{bail, Context, Result};
-use bdf_parser::{Encoding, Font, Glyph};
+use anyhow::{bail, ensure, Context, Result};
+use bdf_parser::{BoundingBox, Coord, Encoding, Font, Glyph};
 use eg_bdf::BdfTextStyle;
 use embedded_graphics::{
     image::ImageRaw,
     mono_font::{mapping::Mapping, DecorationDimensions, MonoFont},
     pixelcolor::BinaryColor,
     prelude::*,
-    text::{Baseline, Text},
+    primitives::Rectangle,
+    text::Text,
 };
 use embedded_graphics_simulator::{OutputSettings, SimulatorDisplay};
 use quote::{format_ident, quote};
 
-use crate::{ConvertedFont, EgBdfOutput};
+use crate::{eg_bdf_font::bounding_box_to_rectangle, ConvertedFont, EgBdfOutput, GlyphAlignment};
 
 /// Font conversion output for [`MonoFont`].
 #[derive(Debug)]
@@ -32,29 +33,37 @@ pub struct MonoFontOutput {
     mapping: Option<Mapping>,
 }
 
+fn determine_glyph_metrics<'a>(glyphs: impl Iterator<Item = &'a Glyph>) -> (Rectangle, u32) {
+    // Default to 1x1 pixel bounding box at the origin.
+    // This ensures that the relative positioning of glyphs that don't touch the baseline is
+    // maintained in case only this kind of glyph is included.
+    let mut bounding_box = BoundingBox {
+        offset: Coord::new(0, 0),
+        size: Coord::new(1, 1),
+    };
+
+    let mut max_dwidth = 0;
+    for glyph in glyphs {
+        bounding_box = bounding_box.union(&glyph.bounding_box);
+        if let Some(width) = glyph.width_horizontal {
+            max_dwidth = max_dwidth.max(width.device.x);
+        }
+    }
+
+    (
+        bounding_box_to_rectangle(&bounding_box),
+        max_dwidth.try_into().unwrap(),
+    )
+}
+
 impl MonoFontOutput {
     pub(crate) fn new(bdf: EgBdfOutput) -> Result<Self> {
         let font = bdf.as_font();
-        let metrics = &bdf.font.bdf.metrics;
         let style = BdfTextStyle::new(&font, BinaryColor::On);
 
         let glyphs_per_row = 16; //TODO: make configurable
         let columns = glyphs_per_row; // TODO: allow smaller column count
         let rows = font.glyphs.len().div_ceil(glyphs_per_row);
-
-        let character_size = bdf.bounding_box().size;
-        let character_spacing = 0;
-        let baseline = metrics.ascent.saturating_sub(1);
-        let strikethrough = DecorationDimensions::new(
-            bdf.font.strikethrough_position,
-            bdf.font.strikethrough_thickness,
-        );
-        let underline =
-            DecorationDimensions::new(bdf.font.underline_position, bdf.font.underline_thickness);
-
-        let mut bitmap = SimulatorDisplay::new(
-            character_size.component_mul(Size::new(columns as u32, rows as u32)),
-        );
 
         let mapping = glyphs_to_mapping(&bdf.font.glyphs);
 
@@ -80,19 +89,52 @@ impl MonoFontOutput {
                 .collect()
         };
 
-        for (i, glyph) in glyphs.iter().enumerate() {
-            let x = (i % glyphs_per_row) as i32 * character_size.width as i32;
-            let y = (i / glyphs_per_row) as i32 * character_size.height as i32;
+        ensure!(!glyphs.is_empty(), "Font must contain at least one glyph");
 
+        let (bounding_box, max_dwidth) = determine_glyph_metrics(glyphs.iter());
+
+        let character_size = bounding_box.size;
+        let character_spacing = max_dwidth.saturating_sub(character_size.width);
+
+        let baseline: u32 = (-bounding_box.top_left.y).try_into().unwrap();
+        let strikethrough = DecorationDimensions::new(
+            bdf.font.strikethrough_position,
+            bdf.font.strikethrough_thickness,
+        );
+        let underline =
+            DecorationDimensions::new(bdf.font.underline_position, bdf.font.underline_thickness);
+
+        let mut bitmap = SimulatorDisplay::new(
+            character_size.component_mul(Size::new(columns as u32, rows as u32)),
+        );
+
+        for (i, glyph) in glyphs.iter().enumerate() {
             // TODO: assumes unicode
             let c = match glyph.encoding {
                 Encoding::Standard(index) => char::from_u32(index).unwrap(),
                 _ => bail!("invalid encoding: '{:?}'", glyph.encoding),
             };
 
-            Text::with_baseline(&String::from(c), Point::new(x, y), style, Baseline::Top)
-                .draw(&mut bitmap)
-                .unwrap();
+            let (row, column) = (i / glyphs_per_row, i % glyphs_per_row);
+
+            let glyph_position =
+                Point::zero() + Size::new(column as u32, row as u32).component_mul(character_size);
+            let baseline_offset = Point::new(-glyph.bounding_box.offset.x, baseline as i32);
+            let alignment_offset = match bdf.font.glyph_alignment {
+                GlyphAlignment::Left => 0,
+                GlyphAlignment::Center => {
+                    (character_size.width as i32 - glyph.bounding_box.size.x) / 2
+                }
+                GlyphAlignment::Right => character_size.width as i32 - glyph.bounding_box.size.x,
+            };
+
+            Text::new(
+                &String::from(c),
+                glyph_position + baseline_offset + Point::new(alignment_offset, 0),
+                style,
+            )
+            .draw(&mut bitmap)
+            .unwrap();
         }
 
         let data = bitmap.to_be_bytes();

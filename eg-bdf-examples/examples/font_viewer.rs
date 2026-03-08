@@ -4,7 +4,7 @@ use eg_font_converter::{FontConverter, Mapping};
 use embedded_graphics::{
     geometry::AnchorPoint,
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
-    pixelcolor::Rgb888,
+    pixelcolor::{Gray8, Rgb888},
     prelude::*,
     primitives::{Line, PrimitiveStyle},
     text::{renderer::TextRenderer, Alignment, Baseline, Text, TextStyleBuilder},
@@ -16,6 +16,40 @@ use embedded_graphics_simulator::{
 fn main() {
     if let Err(e) = try_main() {
         eprintln!("Error: {e:#}");
+    }
+}
+
+fn draw_character_bounding_boxes<S: TextRenderer<Color = Rgb888>>(
+    display: &mut SimulatorDisplay<Rgb888>,
+    text: &Text<S>,
+) where
+    S: Clone,
+{
+    let mut dummy_display = display.clone();
+
+    let mut p = text.position;
+    let mut toggle = false;
+
+    for c in text.text.chars().map(|c| c.to_string()) {
+        if c == "\n" {
+            p.x = text.position.x;
+        }
+
+        let t = Text {
+            text: &c,
+            position: p,
+            ..text.clone()
+        };
+
+        let fill_color = Gray8::new(if toggle { 30 } else { 50 }).into();
+
+        t.bounding_box()
+            .into_styled(PrimitiveStyle::with_fill(fill_color))
+            .draw(display)
+            .unwrap();
+
+        p = t.draw(&mut dummy_display).unwrap();
+        toggle = !toggle;
     }
 }
 
@@ -36,6 +70,7 @@ fn draw<S: TextRenderer<Color = Rgb888> + Copy>(
     display: &mut SimulatorDisplay<Rgb888>,
     style: S,
     line_height: u32,
+    highlight_characters: bool,
 ) {
     let abc = ('a'..='z').collect::<String>();
     let digits = ('0'..='9').collect::<String>();
@@ -54,6 +89,9 @@ fn draw<S: TextRenderer<Color = Rgb888> + Copy>(
         .unwrap();
 
     let text = Text::new(&string, position, style);
+    if highlight_characters {
+        draw_character_bounding_boxes(display, &text);
+    }
     draw_text(display, &text);
 
     let position = display.bounding_box().anchor_point(AnchorPoint::BottomLeft)
@@ -138,6 +176,7 @@ fn try_main() -> Result<()> {
     let mut window = Window::new("Font viewer", &settings);
 
     let mut use_mono_font = false;
+    let mut highlight_characters = false;
 
     'main_loop: loop {
         window.update(&display);
@@ -145,9 +184,9 @@ fn try_main() -> Result<()> {
         for event in window.events() {
             match event {
                 SimulatorEvent::KeyDown { keycode, .. } => match keycode {
-                    Keycode::M => {
-                        use_mono_font = !use_mono_font;
-                    }
+                    Keycode::M => use_mono_font = !use_mono_font,
+                    Keycode::C => highlight_characters = !highlight_characters,
+                    Keycode::Q => break 'main_loop,
                     _ => {}
                 },
                 SimulatorEvent::Quit => break 'main_loop,
@@ -160,12 +199,12 @@ fn try_main() -> Result<()> {
         display.clear(Rgb888::BLACK).unwrap();
         if use_mono_font {
             let style = MonoTextStyle::new(&mono_font, Rgb888::WHITE);
-            draw(&mut display, style, line_height);
+            draw(&mut display, style, line_height, highlight_characters);
 
             hint.insert_str(0, "Mono | ");
         } else {
             let style = BdfTextStyle::new(&bdf_font, Rgb888::WHITE);
-            draw(&mut display, style, line_height);
+            draw(&mut display, style, line_height, highlight_characters);
 
             hint.insert_str(0, "Bdf | ");
         }

@@ -107,6 +107,7 @@ pub struct FontConverter<'a> {
     data_file_extension: String,
     data_file_path: Option<PathBuf>,
     comments: Vec<String>,
+    glyph_alignment: GlyphAlignment,
 
     glyphs: BTreeSet<char>,
     missing_glyph_substitute: Option<char>,
@@ -134,6 +135,7 @@ impl<'a> FontConverter<'a> {
             data_file_extension: "data".to_string(),
             data_file_path: None,
             comments: Vec::new(),
+            glyph_alignment: GlyphAlignment::Center,
             glyphs: BTreeSet::new(),
             missing_glyph_substitute: None,
         }
@@ -252,6 +254,17 @@ impl<'a> FontConverter<'a> {
         self
     }
 
+    /// Set the glyph alignment in `MonoFont`s.
+    ///
+    /// When a proportional font is converted into a `MonoFont` all glyphs have to use the same
+    /// bounding box, which matches the largest glyph in the included glyph subset. This setting
+    /// determines how smaller glyphs are aligned in this bounding box.
+    pub fn glyph_alignment(mut self, glyph_alignment: GlyphAlignment) -> Self {
+        self.glyph_alignment = glyph_alignment;
+
+        self
+    }
+
     fn convert(&self) -> Result<ConvertedFont> {
         ensure!(
             is_valid_identifier(&self.name),
@@ -325,6 +338,7 @@ impl<'a> FontConverter<'a> {
             data_file_extension: self.data_file_extension.clone(),
             data_file_path: self.data_file_path.clone(),
             comments: self.comments.clone(),
+            glyph_alignment: self.glyph_alignment,
             underline_position,
             underline_thickness,
             strikethrough_position,
@@ -382,6 +396,7 @@ struct ConvertedFont {
     pub data_file_extension: String,
     pub data_file_path: Option<PathBuf>,
     pub comments: Vec<String>,
+    pub glyph_alignment: GlyphAlignment,
 
     pub glyphs: Vec<Glyph>,
     pub replacement_character: usize,
@@ -514,6 +529,17 @@ impl Visibility {
         }
         .to_string()
     }
+}
+
+/// Glyph alignment.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GlyphAlignment {
+    /// Left aligned.
+    Left,
+    /// Center aligned.
+    Center,
+    /// Right aligned.
+    Right,
 }
 
 #[cfg(test)]
