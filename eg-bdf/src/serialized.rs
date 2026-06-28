@@ -13,22 +13,29 @@ const fn get_be_u32(data: &[u8], idx: usize) -> u32 {
     u32::from_be_bytes([data[idx], data[idx + 1], data[idx + 2], data[idx + 3]])
 }
 
+/// Serialized BDF font.
+///
+/// # Binary Format
+///
+/// All integers are stored in big endian byte order.
+///
 /// * Header (12 Bytes):
-/// -    Ascent  (pixels, u16 BE)
-/// -    Descent (pixels, u16 BE)
-/// -    Replacement Character (index into character table, u32 BE)
-/// -    Character Table Length (entries, u32 BE)
+///   * Ascent  (pixels, `u16`)
+///   * Descent (pixels, `u16`)
+///   * Replacement Character (index into character table, `u32`)
+///   * Character Table Length (number of entries, `u32`)
 ///
 /// * Glyph Table (17 Bytes Per Entry):
-/// -    corresponding codepoint (u32 BE)
-/// -    top_left.x (i16 BE)
-/// -    top_left.y (i16 BE)
-/// -    size.width (u16 BE)
-/// -    size.height (u16 BE)
-/// -    device_width (pixels, u8)
-/// -    data index  (bytes from start of data, u32 BE)
+///   * corresponding codepoint (`u32`)
+///   * `top_left.x` (`i16`)
+///   * `top_left.y` (`i16`)
+///   * `size.width` (`u16`)
+///   * `size.height` (`u16`)
+///   * `device_width` (pixels, `u8`)
+///   * data index  (bytes from start of data, `u32`)
 ///
-/// Font bitmap data is stored afterwards
+/// The bitmap data for all glyphs is stored after the header and glyph table. Each glyph bitmap
+/// starts at a byte boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SerializedBdfFont<'a> {
     /// The raw u8 data of the serialized font
