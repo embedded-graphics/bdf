@@ -3,7 +3,7 @@ use embedded_graphics::{prelude::*, primitives::Rectangle};
 
 // Structure Sizes
 const HEADER_SIZE: usize = 12;
-const GLYPH_TABLE_ENTRY_SIZE: usize = 17;
+const GLYPH_TABLE_ENTRY_SIZE: usize = 18;
 
 // Offsets for the header
 const ASCENT_OFFSET: usize = 0;
@@ -17,8 +17,8 @@ const TOPLEFTX_OFFSET: usize = 4;
 const TOPLEFTY_OFFSET: usize = 6;
 const SIZEX_OFFSET: usize = 8;
 const SIZEY_OFFSET: usize = 10;
-const KERN_OFFSET: usize = 12;
-const IDX_OFFSET: usize = 13;
+const DEVICE_WIDTH_OFFSET: usize = 12;
+const IDX_OFFSET: usize = 14;
 
 const fn get_be_i16(data: &[u8], idx: usize) -> i16 {
     i16::from_be_bytes([data[idx], data[idx + 1]])
@@ -44,13 +44,13 @@ const fn get_be_u32(data: &[u8], idx: usize) -> u32 {
 ///   * Replacement Character (index into character table, `u32`)
 ///   * Glyph Table Length (number of entries, `u32`)
 ///
-/// * Glyph Table (17 Bytes Per Entry):
+/// * Glyph Table (18 Bytes Per Entry):
 ///   * corresponding codepoint (`u32`)
 ///   * `top_left.x` (`i16`)
 ///   * `top_left.y` (`i16`)
 ///   * `size.width` (`u16`)
 ///   * `size.height` (`u16`)
-///   * `device_width` (pixels, `u8`)
+///   * `device_width` (pixels, `u16`)
 ///   * data index  (bytes from start of data, `u32`)
 ///
 /// The bitmap data for all glyphs is stored after the header and glyph table. Each glyph bitmap
@@ -108,7 +108,7 @@ impl<'a> SerializedBdfFont<'a> {
         let top_left_y = get_be_i16(glyph, TOPLEFTY_OFFSET);
         let width = get_be_u16(glyph, SIZEX_OFFSET);
         let height = get_be_u16(glyph, SIZEY_OFFSET);
-        let kerning = glyph[KERN_OFFSET];
+        let device_width = get_be_u16(glyph, DEVICE_WIDTH_OFFSET);
 
         let data_index = get_be_u32(glyph, IDX_OFFSET);
         let bitmap_data = self
@@ -127,7 +127,7 @@ impl<'a> SerializedBdfFont<'a> {
                     height: u32::from(height),
                 },
             },
-            device_width: u32::from(kerning),
+            device_width: u32::from(device_width),
             bitmap_data,
         })
     }
@@ -190,7 +190,7 @@ mod tests {
         0xFF, 0xFD, // top_left_y = -3
         0x00, 0x04, // size_x = 4
         0x00, 0x04, // size_y = 4
-        0x06, // device_width = 6
+        0x00, 0x06, // device_width = 6
         0x00, 0x00, 0x00, 0x00, // bitmap offset
 
         // 'b' glyph
@@ -199,7 +199,7 @@ mod tests {
         0xFF, 0xFC, // top_left_y = -4
         0x00, 0x05, // size_x = 5
         0x00, 0x05, // size_y = 5
-        0x05, // device_width = 5
+        0x00, 0x05, // device_width = 5
         0x00, 0x00, 0x00, 4 * 4 / 8, // bitmap offset
 
         // glyph bitmaps
