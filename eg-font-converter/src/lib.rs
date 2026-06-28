@@ -85,9 +85,11 @@ pub use embedded_graphics::mono_font::mapping::Mapping;
 
 mod eg_bdf_font;
 mod mono_font;
+mod serializer;
 
 pub use eg_bdf_font::EgBdfOutput;
 pub use mono_font::MonoFontOutput;
+pub use serializer::serialize;
 
 #[derive(Debug)]
 enum FileOrString<'a> {

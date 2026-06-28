@@ -13,7 +13,7 @@ struct Args {
     bdf_file: Option<PathBuf>,
 
     /// Name of the Rust constant.
-    #[arg(required_unless_present = "list_mappings")]
+    #[arg(required_unless_present_any = ["list_mappings", "serialize"])]
     name: Option<String>,
 
     /// Inline PNG image in documentation.
@@ -27,6 +27,10 @@ struct Args {
     /// Generate data file.
     #[arg(long)]
     data: Option<PathBuf>,
+
+    /// Generate serialized BDF data instead of mono font data
+    #[arg(long)]
+    serialize: bool,
 
     /// Generate PNG image file.
     #[arg(long)]
@@ -93,20 +97,28 @@ fn convert(args: &Args) -> Result<()> {
 
     let font = converter.convert_mono_font()?;
 
+    if args.serialize {
+        let sbdffont = eg_font_converter::serialize(converter.convert_eg_bdf().unwrap().as_font())?;
+        if let Some(data) = &args.data {
+            std::fs::write(data, &sbdffont)
+                .with_context(|| format!("Failed to write data file {}", data.to_string_lossy()))?;
+        }
+    }
     //TODO: use FontConverterOutput::save
+    else {
+        if let Some(rust) = &args.rust {
+            std::fs::write(rust, font.rust())
+                .with_context(|| format!("Failed to write Rust file {}", rust.to_string_lossy()))?;
+        }
 
-    if let Some(rust) = &args.rust {
-        std::fs::write(rust, font.rust())
-            .with_context(|| format!("Failed to write Rust file {}", rust.to_string_lossy()))?;
-    }
+        if let Some(data) = &args.data {
+            std::fs::write(data, font.data())
+                .with_context(|| format!("Failed to write data file {}", data.to_string_lossy()))?;
+        }
 
-    if let Some(data) = &args.data {
-        std::fs::write(data, font.data())
-            .with_context(|| format!("Failed to write data file {}", data.to_string_lossy()))?;
-    }
-
-    if let Some(png) = &args.png {
-        font.save_png(png)?;
+        if let Some(png) = &args.png {
+            font.save_png(png)?;
+        }
     }
 
     Ok(())

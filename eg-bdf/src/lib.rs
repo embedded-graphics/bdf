@@ -20,8 +20,10 @@ use embedded_graphics::{
     primitives::Rectangle,
 };
 
-mod text;
-pub use text::BdfTextStyle;
+mod proportional;
+mod serialized;
+pub use proportional::{ProportionalFont, ProportionalTextStyle};
+pub use serialized::{SerializedBdfFont, SerializedBdfTextStyle};
 
 /// BDF font.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -38,18 +40,7 @@ pub struct BdfFont<'a> {
     pub data: &'a [u8],
 }
 
-impl<'a> BdfFont<'a> {
-    fn get_glyph(&self, c: char) -> &'a BdfGlyph {
-        self.glyphs
-            .iter()
-            .find(|g| g.character == c)
-            // TODO: don't panic if replacement_character is invalid
-            .unwrap_or_else(|| &self.glyphs[self.replacement_character])
-    }
-}
-
-/// BDF glyph information.
-// TODO: store more efficiently (e.g. use smaller integer types if possible, store as struct of arrays instead of array of structs)
+/// BDF glyph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfGlyph {
     /// The corresponding character.
@@ -58,23 +49,46 @@ pub struct BdfGlyph {
     pub bounding_box: Rectangle,
     /// The horizontal distance to the start point of the next glyph.
     pub device_width: u32,
-    /// The start index in the bitmap data.
+    /// The bitmap data of the glyph.
     pub start_index: usize,
 }
 
-impl BdfGlyph {
-    fn draw<D: DrawTarget>(
+impl<'a> BdfGlyph {
+    fn into_glyph(self, font: &'a BdfFont) -> DisplayBdfGlyph<'a> {
+        DisplayBdfGlyph {
+            character: self.character,
+            bounding_box: self.bounding_box,
+            device_width: self.device_width,
+            bitmap_data: &font.data[self.start_index..],
+        }
+    }
+}
+
+/// Unserialized BDF text style
+pub type BdfTextStyle<'a, C> = ProportionalTextStyle<'a, BdfFont<'a>, C>;
+
+/// BDF glyph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DisplayBdfGlyph<'a> {
+    /// The corresponding character.
+    pub character: char,
+    /// The glyph bounding box.
+    pub bounding_box: Rectangle,
+    /// The horizontal distance to the start point of the next glyph.
+    pub device_width: u32,
+    /// The bitmap data of the glyph.
+    pub bitmap_data: &'a [u8],
+}
+
+impl<'a> DisplayBdfGlyph<'a> {
+    /// Draws a glyph at a certain place and color
+    pub fn draw<D: DrawTarget>(
         &self,
         position: Point,
         color: D::Color,
-        data: &[u8],
         target: &mut D,
     ) -> Result<(), D::Error> {
-        let mut data_iter = RawDataSlice::<RawU1, LittleEndian>::new(data).into_iter();
-
-        if self.start_index > 0 {
-            data_iter.nth(self.start_index - 1);
-        }
+        let mut data_iter = RawDataSlice::<RawU1, LittleEndian>::new(self.bitmap_data).into_iter();
 
         self.bounding_box
             .translate(position)

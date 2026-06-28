@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use eg_bdf::BdfTextStyle;
+use eg_bdf::{BdfTextStyle, SerializedBdfTextStyle};
 use eg_font_converter::{FontConverter, Mapping};
 use embedded_graphics::{
     geometry::AnchorPoint,
@@ -114,6 +114,10 @@ fn try_main() -> Result<()> {
         .with_context(|| "couldn't convert font")?;
     let bdf_font = bdf_output.as_font();
 
+    let sbdf_data = eg_font_converter::serialize(bdf_font)?;
+
+    let serialized_bdf = eg_bdf::SerializedBdfFont::new(&sbdf_data).unwrap();
+
     let mono_output = converter
         .convert_mono_font()
         .with_context(|| "couldn't convert font")?;
@@ -138,6 +142,7 @@ fn try_main() -> Result<()> {
     let mut window = Window::new("Font viewer", &settings);
 
     let mut use_mono_font = false;
+    let use_serialized_font = true;
 
     'main_loop: loop {
         window.update(&display);
@@ -163,6 +168,11 @@ fn try_main() -> Result<()> {
             draw(&mut display, style, line_height);
 
             hint.insert_str(0, "Mono | ");
+        } else if use_serialized_font {
+            let style = SerializedBdfTextStyle::new(&serialized_bdf, Rgb888::WHITE);
+            draw(&mut display, style, line_height);
+
+            hint.insert_str(0, "SerializedBdf | ");
         } else {
             let style = BdfTextStyle::new(&bdf_font, Rgb888::WHITE);
             draw(&mut display, style, line_height);

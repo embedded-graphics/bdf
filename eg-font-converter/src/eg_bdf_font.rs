@@ -61,10 +61,12 @@ impl EgBdfOutput {
                 character,
                 bounding_box,
                 device_width,
-                start_index: data.len(),
+                start_index: data.as_raw_slice().len(),
             });
 
             data.extend(glyph.pixels());
+            // Pad to byte boundary
+            data.extend(std::iter::repeat_n(true, 8 - (data.len() % 8)));
         }
 
         Ok(Self {
