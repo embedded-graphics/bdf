@@ -23,7 +23,7 @@ const fn get_be_u32(data: &[u8], idx: usize) -> u32 {
 ///   * Ascent  (pixels, `u16`)
 ///   * Descent (pixels, `u16`)
 ///   * Replacement Character (index into character table, `u32`)
-///   * Character Table Length (number of entries, `u32`)
+///   * Glyph Table Length (number of entries, `u32`)
 ///
 /// * Glyph Table (17 Bytes Per Entry):
 ///   * corresponding codepoint (`u32`)
@@ -41,18 +41,19 @@ pub struct SerializedBdfFont<'a> {
     /// The raw u8 data of the serialized font
     data: &'a [u8],
 }
+
 impl<'a> SerializedBdfFont<'a> {
     // Structure Sizes
     const HEADER_SIZE: usize = 12;
-    const CHARACTER_TABLE_ENTRY_SIZE: usize = 17;
+    const GLYPH_TABLE_ENTRY_SIZE: usize = 17;
 
     // Offsets for the header
     const ASCENT_OFFSET: usize = 0;
     const DESCENT_OFFSET: usize = 2;
     const REPLACEMENT_OFFSET: usize = 4;
-    const CHAR_TABLE_LEN_OFFSET: usize = 8;
+    const GLYPH_COUNT_OFFSET: usize = 8;
 
-    // Offsets for the character table entries
+    // Offsets for the glyph table entries
     const CODEPOINT_OFFSET: usize = 0;
     const TOPLEFTX_OFFSET: usize = 4;
     const TOPLEFTY_OFFSET: usize = 6;
@@ -61,20 +62,18 @@ impl<'a> SerializedBdfFont<'a> {
     const KERN_OFFSET: usize = 12;
     const IDX_OFFSET: usize = 13;
 
-    const fn character_table_data(
+    const fn glyph_data(
         &self,
         index: usize,
-    ) -> Option<&[u8; SerializedBdfFont::CHARACTER_TABLE_ENTRY_SIZE]> {
+    ) -> Option<&[u8; SerializedBdfFont::GLYPH_TABLE_ENTRY_SIZE]> {
         let (_header, data) = self
             .data
-            .split_at(Self::HEADER_SIZE + (index * Self::CHARACTER_TABLE_ENTRY_SIZE));
+            .split_at(Self::HEADER_SIZE + (index * Self::GLYPH_TABLE_ENTRY_SIZE));
         data.first_chunk()
     }
 
     /// Verifies data in a way that prevents panics and returns a serialized font if the data is valid
-    ///
-    /// TODO: Make this const
-    pub fn new(data: &'a [u8]) -> Result<Self, &'static str> {
+    pub const fn new(data: &'a [u8]) -> Result<Self, &'static str> {
         // No header
         if data.len() < Self::HEADER_SIZE {
             return Err("No header");
@@ -83,9 +82,7 @@ impl<'a> SerializedBdfFont<'a> {
         // Safe to construct a font and index its header
         let font = Self { data };
 
-        // Character table length invalid
-
-        // Character table too small
+        // Glyph table too small
         if data.len() < font.header_size() {
             return Err("No metadata");
         }
@@ -94,29 +91,35 @@ impl<'a> SerializedBdfFont<'a> {
         Ok(font)
     }
 
-    /// Returns the length of the glyph table
-    pub const fn character_count(self) -> u32 {
-        get_be_u32(self.data, Self::CHAR_TABLE_LEN_OFFSET)
+    /// Returns the number of glyphs.
+    pub const fn glyph_count(self) -> usize {
+        get_be_u32(self.data, Self::GLYPH_COUNT_OFFSET) as usize
     }
 
     /// Returns the offset of the data block
     const fn header_size(self) -> usize {
-        Self::HEADER_SIZE + ((self.character_count() as usize) * Self::CHARACTER_TABLE_ENTRY_SIZE)
+        Self::HEADER_SIZE + self.glyph_count() * Self::GLYPH_TABLE_ENTRY_SIZE
     }
 
-    /// Returns a BdfGlyph in the glyph table
-    pub fn character_table(self, idx: usize) -> Option<DisplayBdfGlyph<'a>> {
-        let ctd = self.character_table_data(idx)?;
-        let corresponding_character = char::from_u32(get_be_u32(ctd, Self::CODEPOINT_OFFSET));
-        let top_left_x = get_be_i16(ctd, Self::TOPLEFTX_OFFSET);
-        let top_left_y = get_be_i16(ctd, Self::TOPLEFTY_OFFSET);
-        let width = get_be_u16(ctd, Self::SIZEX_OFFSET);
-        let height = get_be_u16(ctd, Self::SIZEY_OFFSET);
-        let kerning = ctd[Self::KERN_OFFSET];
-        let data_index = get_be_u32(ctd, Self::IDX_OFFSET);
+    /// Gets the glyph for the given index.
+    ///
+    /// Returns [`None`] if the index is out of bounds.
+    pub fn lookup_by_index(self, index: usize) -> Option<DisplayBdfGlyph<'a>> {
+        let glyph = self.glyph_data(index)?;
+        let corresponding_character = char::from_u32(get_be_u32(glyph, Self::CODEPOINT_OFFSET))?;
+        let top_left_x = get_be_i16(glyph, Self::TOPLEFTX_OFFSET);
+        let top_left_y = get_be_i16(glyph, Self::TOPLEFTY_OFFSET);
+        let width = get_be_u16(glyph, Self::SIZEX_OFFSET);
+        let height = get_be_u16(glyph, Self::SIZEY_OFFSET);
+        let kerning = glyph[Self::KERN_OFFSET];
+
+        let data_index = get_be_u32(glyph, Self::IDX_OFFSET);
+        let bitmap_data = self
+            .data
+            .get((self.header_size() + data_index as usize)..)?;
 
         Some(DisplayBdfGlyph {
-            character: corresponding_character.unwrap(),
+            character: corresponding_character,
             bounding_box: Rectangle {
                 top_left: Point {
                     x: i32::from(top_left_x),
@@ -128,9 +131,7 @@ impl<'a> SerializedBdfFont<'a> {
                 },
             },
             device_width: u32::from(kerning),
-            bitmap_data: self
-                .data
-                .get((self.header_size() + data_index as usize)..)?,
+            bitmap_data: bitmap_data,
         })
     }
 }
@@ -146,18 +147,20 @@ impl<'a> ProportionalFont<'a> for SerializedBdfFont<'a> {
 
     fn replacement_glyph(&self) -> DisplayBdfGlyph<'_> {
         let rpos = get_be_u32(self.data, Self::REPLACEMENT_OFFSET);
-        self.character_table(rpos as usize)
+        self.lookup_by_index(rpos as usize)
             .expect("Replacement character isn't valid")
     }
 
     fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>> {
         // TODO, make this a binary search
-        for i in 0..(self.character_count() as usize) {
-            let tested_character = self
-                .character_table(i)
-                .expect("Character table is corrupted");
-            if tested_character.character == c {
-                return Some(tested_character);
+        for i in 0..self.glyph_count() {
+            let Some(glyph) = self.lookup_by_index(i) else {
+                // skip invalid glyphs
+                continue;
+            };
+
+            if glyph.character == c {
+                return Some(glyph);
             }
         }
 
