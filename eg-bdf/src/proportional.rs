@@ -15,29 +15,28 @@ pub struct Metrics {
     pub line_height: u32,
 }
 
-/// A proportional font
-pub trait ProportionalFont<'a>: Clone {
-    /// Returns a struct containing ascent, descent, baseline_offset, and line_height
-    fn metrics(&self) -> Metrics;
-    /// Finds a BdfGlyph for a character
-    fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>>;
-    /// Finds the replacement glyph
-    fn replacement_glyph(&'a self) -> DisplayBdfGlyph<'a>;
-
-    /// Returns the baseline offset
+impl Metrics {
+    /// Returns the baseline offset.
     fn baseline_offset(&self, baseline: Baseline) -> i32 {
         match baseline {
-            Baseline::Top => self.metrics().ascent.saturating_sub(1) as i32,
-            Baseline::Bottom => -(self.metrics().descent as i32),
-            Baseline::Middle => (self.metrics().ascent as i32 - self.metrics().descent as i32) / 2,
+            Baseline::Top => self.ascent.saturating_sub(1) as i32,
+            Baseline::Bottom => -(self.descent as i32),
+            Baseline::Middle => (self.ascent as i32 - self.descent as i32) / 2,
             Baseline::Alphabetic => 0,
         }
     }
+}
 
-    /// Returns a glyph, or a replacement character if no corresponding glyph exists
-    fn glyph_or_replacement(&'a self, c: char) -> DisplayBdfGlyph<'a> {
-        self.lookup(c).unwrap_or(self.replacement_glyph())
-    }
+/// A proportional font
+pub trait ProportionalFont<'a>: Clone {
+    /// Returns the font metrics.
+    fn metrics(&self) -> Metrics;
+
+    /// Finds the glyph for the given character.
+    fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>>;
+
+    /// Returns the replacement glyph
+    fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>>;
 }
 
 impl<'a> ProportionalFont<'a> for BdfFont<'a> {
@@ -49,8 +48,8 @@ impl<'a> ProportionalFont<'a> for BdfFont<'a> {
         }
     }
 
-    fn replacement_glyph(&'a self) -> DisplayBdfGlyph<'a> {
-        self.glyphs[self.replacement_character].into_glyph(self)
+    fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>> {
+        Some(self.glyphs[self.replacement_character].into_glyph(self))
     }
 
     fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>> {
@@ -104,10 +103,18 @@ impl<'a, C: PixelColor, F: ProportionalFont<'a>> TextRenderer for ProportionalTe
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        let mut position = position + Point::new(0, self.font.baseline_offset(baseline));
+        let metrics = self.font.metrics();
+        let mut position = position + Point::new(0, metrics.baseline_offset(baseline));
 
         for c in text.chars() {
-            let glyph = self.font.glyph_or_replacement(c);
+            let Some(glyph) = self
+                .font
+                .lookup(c)
+                .or_else(|| self.font.replacement_glyph())
+            else {
+                // skip invalid characters entirely if replacement glyph isn't available
+                continue;
+            };
 
             glyph.draw(position, self.color, target)?;
 
@@ -127,17 +134,24 @@ impl<'a, C: PixelColor, F: ProportionalFont<'a>> TextRenderer for ProportionalTe
     where
         D: DrawTarget<Color = Self::Color>,
     {
-        let position = position + Point::new(0, self.font.baseline_offset(baseline));
+        let metrics = self.font.metrics();
+        let position = position + Point::new(0, metrics.baseline_offset(baseline));
 
         Ok(position + Size::new(width, 0))
     }
 
     fn measure_string(&self, text: &str, position: Point, baseline: Baseline) -> TextMetrics {
-        let position = position + Point::new(0, self.font.baseline_offset(baseline));
+        let metrics = self.font.metrics();
+        let position = position + Point::new(0, metrics.baseline_offset(baseline));
 
         let dx = text
             .chars()
-            .map(|c| self.font.glyph_or_replacement(c).device_width)
+            .filter_map(|c| {
+                self.font
+                    .lookup(c)
+                    .or_else(|| self.font.replacement_glyph())
+                    .map(|g| g.device_width)
+            })
             .sum();
 
         // TODO: calculate correct bounding box

@@ -128,7 +128,7 @@ impl<'a> SerializedBdfFont<'a> {
                 },
             },
             device_width: u32::from(kerning),
-            bitmap_data: bitmap_data,
+            bitmap_data,
         })
     }
 }
@@ -143,10 +143,9 @@ impl<'a> ProportionalFont<'a> for SerializedBdfFont<'a> {
         }
     }
 
-    fn replacement_glyph(&self) -> DisplayBdfGlyph<'_> {
+    fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>> {
         let rpos = get_be_u32(self.data, REPLACEMENT_OFFSET);
         self.lookup_by_index(rpos as usize)
-            .expect("Replacement character isn't valid")
     }
 
     fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>> {
@@ -232,7 +231,7 @@ mod tests {
         assert_eq!(font.lookup('c'), None);
 
         let replacement = font.replacement_glyph();
-        assert_eq!(replacement, b);
+        assert_eq!(replacement, Some(b));
     }
 
     fn draw_text(font: &SerializedBdfFont, text: &str) -> MockDisplay<BinaryColor> {
@@ -266,10 +265,10 @@ mod tests {
             Err("No metadata")
         );
 
-        // TODO: check presence of replacement glyph in `new`
-        // let no_glyph_bitmaps_font =
-        //     SerializedBdfFont::new(&TEST_FONT[0..HEADER_SIZE + 2 * GLYPH_TABLE_ENTRY_SIZE])
-        //         .unwrap();
-        // draw_text(&no_glyph_bitmaps_font, "abc").assert_pattern(&[]);
+        // drawing a font without any glyph bitmap data shouldn't panic
+        let no_glyph_bitmaps_font =
+            SerializedBdfFont::new(&TEST_FONT[0..HEADER_SIZE + 2 * GLYPH_TABLE_ENTRY_SIZE])
+                .unwrap();
+        draw_text(&no_glyph_bitmaps_font, "abc").assert_pattern(&[]);
     }
 }
