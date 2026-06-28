@@ -22,7 +22,7 @@ use embedded_graphics::{
 
 mod proportional;
 mod serialized;
-pub use proportional::{ProportionalFont, ProportionalTextStyle, Metrics};
+pub use proportional::{Metrics, ProportionalFont, ProportionalTextStyle};
 pub use serialized::{SerializedBdfFont, SerializedBdfTextStyle};
 
 /// BDF font.
