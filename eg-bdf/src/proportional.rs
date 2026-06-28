@@ -1,4 +1,3 @@
-use crate::{BdfFont, DisplayBdfGlyph};
 use embedded_graphics::{
     prelude::*,
     primitives::Rectangle,
@@ -7,6 +6,8 @@ use embedded_graphics::{
         Baseline,
     },
 };
+
+use crate::DisplayBdfGlyph;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct Metrics {
@@ -37,28 +38,6 @@ pub trait ProportionalFont<'a>: Clone {
 
     /// Returns the replacement glyph
     fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>>;
-}
-
-impl<'a> ProportionalFont<'a> for BdfFont<'a> {
-    fn metrics(&self) -> Metrics {
-        Metrics {
-            ascent: self.ascent,
-            descent: self.descent,
-            line_height: self.ascent + self.descent,
-        }
-    }
-
-    fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>> {
-        Some(self.glyphs[self.replacement_character].into_glyph(self))
-    }
-
-    fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>> {
-        if let Some(&g) = self.glyphs.iter().find(|g| g.character == c) {
-            Some(g.into_glyph(self))
-        } else {
-            None
-        }
-    }
 }
 
 /// A generalized text style for proportional fonts

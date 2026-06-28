@@ -25,6 +25,8 @@ mod serialized;
 pub use proportional::{ProportionalFont, ProportionalTextStyle};
 pub use serialized::{SerializedBdfFont, SerializedBdfTextStyle};
 
+use crate::proportional::Metrics;
+
 /// BDF font.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BdfFont<'a> {
@@ -60,6 +62,28 @@ impl<'a> BdfGlyph {
             bounding_box: self.bounding_box,
             device_width: self.device_width,
             bitmap_data: &font.data[self.start_index..],
+        }
+    }
+}
+
+impl<'a> ProportionalFont<'a> for BdfFont<'a> {
+    fn metrics(&self) -> Metrics {
+        Metrics {
+            ascent: self.ascent,
+            descent: self.descent,
+            line_height: self.ascent + self.descent,
+        }
+    }
+
+    fn replacement_glyph(&self) -> Option<DisplayBdfGlyph<'_>> {
+        Some(self.glyphs[self.replacement_character].into_glyph(self))
+    }
+
+    fn lookup(&self, c: char) -> Option<DisplayBdfGlyph<'_>> {
+        if let Some(&g) = self.glyphs.iter().find(|g| g.character == c) {
+            Some(g.into_glyph(self))
+        } else {
+            None
         }
     }
 }
