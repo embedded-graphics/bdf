@@ -25,7 +25,7 @@ pub fn serialize(font: BdfFont) -> anyhow::Result<Vec<u8>> {
         append_be_data!(glyph.bounding_box.top_left.y, i16);
         append_be_data!(glyph.bounding_box.size.width, u16);
         append_be_data!(glyph.bounding_box.size.height, u16);
-        append_be_data!(glyph.device_width, u8);
+        append_be_data!(glyph.device_width, u16);
         append_be_data!(glyph.start_index, u32);
     }
 

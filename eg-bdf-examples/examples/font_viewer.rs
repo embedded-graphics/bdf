@@ -57,7 +57,7 @@ fn draw<S: TextRenderer<Color = Rgb888> + Copy>(
     draw_text(display, &text);
 
     let position = display.bounding_box().anchor_point(AnchorPoint::BottomLeft)
-        + Point::new(5, -(line_height as i32) * 3 / 2);
+        + Point::new(5, -(line_height as i32) * 3);
 
     Line::with_delta(position.y_axis(), Point::zero() + display.size().x_axis())
         .into_styled(PrimitiveStyle::with_stroke(Rgb888::CSS_DIM_GRAY, 1))
@@ -130,7 +130,7 @@ fn try_main() -> Result<()> {
         .build();
 
     let line_height = bdf_font.ascent + bdf_font.descent;
-    let display_height = line_height * 8;
+    let display_height = line_height * 10;
     let display_width = (line_height * 25).max(display_height);
     let display_size = Size::new(display_width, display_height);
 
@@ -142,7 +142,7 @@ fn try_main() -> Result<()> {
     let mut window = Window::new("Font viewer", &settings);
 
     let mut use_mono_font = false;
-    let use_serialized_font = true;
+    let mut use_serialized_font = false;
 
     'main_loop: loop {
         window.update(&display);
@@ -153,6 +153,14 @@ fn try_main() -> Result<()> {
                     Keycode::M => {
                         use_mono_font = !use_mono_font;
                     }
+                    Keycode::S => {
+                        if use_mono_font {
+                            use_mono_font = false;
+                            use_serialized_font = true;
+                        } else {
+                            use_serialized_font = !use_serialized_font;
+                        }
+                    }
                     _ => {}
                 },
                 SimulatorEvent::Quit => break 'main_loop,
@@ -160,7 +168,7 @@ fn try_main() -> Result<()> {
             }
         }
 
-        let mut hint = "Press M to toggle".to_string();
+        let mut hint = "Press M or S to toggle".to_string();
 
         display.clear(Rgb888::BLACK).unwrap();
         if use_mono_font {
