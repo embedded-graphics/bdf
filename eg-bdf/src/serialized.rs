@@ -121,7 +121,7 @@ impl<'a> SerializedBdfFont<'a> {
                 },
             },
             device_width: u32::from(kerning),
-            bitmap_data: &self
+            bitmap_data: self
                 .data
                 .get((self.header_size() + data_index as usize)..)?,
         })
