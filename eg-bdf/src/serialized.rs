@@ -1,6 +1,25 @@
 use crate::{DisplayBdfGlyph, ProportionalFont, ProportionalTextStyle};
 use embedded_graphics::{prelude::*, primitives::Rectangle};
 
+// Structure Sizes
+const HEADER_SIZE: usize = 12;
+const GLYPH_TABLE_ENTRY_SIZE: usize = 17;
+
+// Offsets for the header
+const ASCENT_OFFSET: usize = 0;
+const DESCENT_OFFSET: usize = 2;
+const REPLACEMENT_OFFSET: usize = 4;
+const GLYPH_COUNT_OFFSET: usize = 8;
+
+// Offsets for the glyph table entries
+const CODEPOINT_OFFSET: usize = 0;
+const TOPLEFTX_OFFSET: usize = 4;
+const TOPLEFTY_OFFSET: usize = 6;
+const SIZEX_OFFSET: usize = 8;
+const SIZEY_OFFSET: usize = 10;
+const KERN_OFFSET: usize = 12;
+const IDX_OFFSET: usize = 13;
+
 const fn get_be_i16(data: &[u8], idx: usize) -> i16 {
     i16::from_be_bytes([data[idx], data[idx + 1]])
 }
@@ -43,39 +62,17 @@ pub struct SerializedBdfFont<'a> {
 }
 
 impl<'a> SerializedBdfFont<'a> {
-    // Structure Sizes
-    const HEADER_SIZE: usize = 12;
-    const GLYPH_TABLE_ENTRY_SIZE: usize = 17;
-
-    // Offsets for the header
-    const ASCENT_OFFSET: usize = 0;
-    const DESCENT_OFFSET: usize = 2;
-    const REPLACEMENT_OFFSET: usize = 4;
-    const GLYPH_COUNT_OFFSET: usize = 8;
-
-    // Offsets for the glyph table entries
-    const CODEPOINT_OFFSET: usize = 0;
-    const TOPLEFTX_OFFSET: usize = 4;
-    const TOPLEFTY_OFFSET: usize = 6;
-    const SIZEX_OFFSET: usize = 8;
-    const SIZEY_OFFSET: usize = 10;
-    const KERN_OFFSET: usize = 12;
-    const IDX_OFFSET: usize = 13;
-
-    const fn glyph_data(
-        &self,
-        index: usize,
-    ) -> Option<&[u8; SerializedBdfFont::GLYPH_TABLE_ENTRY_SIZE]> {
+    const fn glyph_data(&self, index: usize) -> Option<&[u8; GLYPH_TABLE_ENTRY_SIZE]> {
         let (_header, data) = self
             .data
-            .split_at(Self::HEADER_SIZE + (index * Self::GLYPH_TABLE_ENTRY_SIZE));
+            .split_at(HEADER_SIZE + (index * GLYPH_TABLE_ENTRY_SIZE));
         data.first_chunk()
     }
 
     /// Verifies data in a way that prevents panics and returns a serialized font if the data is valid
     pub const fn new(data: &'a [u8]) -> Result<Self, &'static str> {
         // No header
-        if data.len() < Self::HEADER_SIZE {
+        if data.len() < HEADER_SIZE {
             return Err("No header");
         }
 
@@ -93,12 +90,12 @@ impl<'a> SerializedBdfFont<'a> {
 
     /// Returns the number of glyphs.
     pub const fn glyph_count(self) -> usize {
-        get_be_u32(self.data, Self::GLYPH_COUNT_OFFSET) as usize
+        get_be_u32(self.data, GLYPH_COUNT_OFFSET) as usize
     }
 
     /// Returns the offset of the data block
     const fn header_size(self) -> usize {
-        Self::HEADER_SIZE + self.glyph_count() * Self::GLYPH_TABLE_ENTRY_SIZE
+        HEADER_SIZE + self.glyph_count() * GLYPH_TABLE_ENTRY_SIZE
     }
 
     /// Gets the glyph for the given index.
@@ -106,14 +103,14 @@ impl<'a> SerializedBdfFont<'a> {
     /// Returns [`None`] if the index is out of bounds.
     pub fn lookup_by_index(self, index: usize) -> Option<DisplayBdfGlyph<'a>> {
         let glyph = self.glyph_data(index)?;
-        let corresponding_character = char::from_u32(get_be_u32(glyph, Self::CODEPOINT_OFFSET))?;
-        let top_left_x = get_be_i16(glyph, Self::TOPLEFTX_OFFSET);
-        let top_left_y = get_be_i16(glyph, Self::TOPLEFTY_OFFSET);
-        let width = get_be_u16(glyph, Self::SIZEX_OFFSET);
-        let height = get_be_u16(glyph, Self::SIZEY_OFFSET);
-        let kerning = glyph[Self::KERN_OFFSET];
+        let corresponding_character = char::from_u32(get_be_u32(glyph, CODEPOINT_OFFSET))?;
+        let top_left_x = get_be_i16(glyph, TOPLEFTX_OFFSET);
+        let top_left_y = get_be_i16(glyph, TOPLEFTY_OFFSET);
+        let width = get_be_u16(glyph, SIZEX_OFFSET);
+        let height = get_be_u16(glyph, SIZEY_OFFSET);
+        let kerning = glyph[KERN_OFFSET];
 
-        let data_index = get_be_u32(glyph, Self::IDX_OFFSET);
+        let data_index = get_be_u32(glyph, IDX_OFFSET);
         let bitmap_data = self
             .data
             .get((self.header_size() + data_index as usize)..)?;
@@ -135,18 +132,19 @@ impl<'a> SerializedBdfFont<'a> {
         })
     }
 }
+
 impl<'a> ProportionalFont<'a> for SerializedBdfFont<'a> {
     fn metrics(&self) -> crate::proportional::Metrics {
         crate::proportional::Metrics {
-            ascent: u32::from(get_be_u16(self.data, Self::ASCENT_OFFSET)),
-            descent: u32::from(get_be_u16(self.data, Self::DESCENT_OFFSET)),
-            line_height: u32::from(get_be_u16(self.data, Self::ASCENT_OFFSET))
-                + u32::from(get_be_u16(self.data, Self::DESCENT_OFFSET)),
+            ascent: u32::from(get_be_u16(self.data, ASCENT_OFFSET)),
+            descent: u32::from(get_be_u16(self.data, DESCENT_OFFSET)),
+            line_height: u32::from(get_be_u16(self.data, ASCENT_OFFSET))
+                + u32::from(get_be_u16(self.data, DESCENT_OFFSET)),
         }
     }
 
     fn replacement_glyph(&self) -> DisplayBdfGlyph<'_> {
-        let rpos = get_be_u32(self.data, Self::REPLACEMENT_OFFSET);
+        let rpos = get_be_u32(self.data, REPLACEMENT_OFFSET);
         self.lookup_by_index(rpos as usize)
             .expect("Replacement character isn't valid")
     }
@@ -170,3 +168,108 @@ impl<'a> ProportionalFont<'a> for SerializedBdfFont<'a> {
 
 /// Stylized serialized BDF text
 pub type SerializedBdfTextStyle<'a, C> = ProportionalTextStyle<'a, SerializedBdfFont<'a>, C>;
+
+#[cfg(test)]
+mod tests {
+    use embedded_graphics::{mock_display::MockDisplay, pixelcolor::BinaryColor, text::Text};
+
+    use crate::proportional::Metrics;
+
+    use super::*;
+
+    #[rustfmt::skip]
+    const TEST_FONT: &[u8] = &[
+        // header
+        0x00, 0x04, // ascent = 4
+        0x00, 0x01, // descent = 1
+        0x00, 0x00, 0x00, 0x01, // replacement glyph at index 1
+        0x00, 0x00, 0x00, 0x02, // 2 glyphs
+
+        // 'a' glyph
+        0x00, 0x00, 0x00, b'a', // codepoint
+        0x00, 0x00, // top_left_x = 0
+        0xFF, 0xFD, // top_left_y = -3
+        0x00, 0x04, // size_x = 4
+        0x00, 0x04, // size_y = 4
+        0x06, // device_width = 6
+        0x00, 0x00, 0x00, 0x00, // bitmap offset
+
+        // 'b' glyph
+        0x00, 0x00, 0x00, b'b', // codepoint
+        0x00, 0x00, // top_left_x = 0
+        0xFF, 0xFC, // top_left_y = -4
+        0x00, 0x05, // size_x = 5
+        0x00, 0x05, // size_y = 5
+        0x05, // device_width = 5
+        0x00, 0x00, 0x00, 4 * 4 / 8, // bitmap offset
+
+        // glyph bitmaps
+        0b11111001, 0b10011111,
+        0b00001_000, 0b10_00100_0, 0b1000_1000, 0b0_0000000,
+    ];
+
+    #[test]
+    fn metadata() {
+        let font = SerializedBdfFont::new(TEST_FONT).unwrap();
+
+        assert_eq!(
+            font.metrics(),
+            Metrics {
+                ascent: 4,
+                descent: 1,
+                line_height: 5
+            }
+        );
+
+        assert_eq!(font.glyph_count(), 2);
+
+        assert!(font.lookup_by_index(0).is_some());
+        assert!(font.lookup_by_index(1).is_some());
+        assert!(font.lookup_by_index(2).is_none());
+
+        let _a = font.lookup('a').unwrap();
+        let b = font.lookup('b').unwrap();
+        assert_eq!(font.lookup('c'), None);
+
+        let replacement = font.replacement_glyph();
+        assert_eq!(replacement, b);
+    }
+
+    fn draw_text(font: &SerializedBdfFont, text: &str) -> MockDisplay<BinaryColor> {
+        let text_style = SerializedBdfTextStyle::new(font, BinaryColor::On);
+
+        let mut display = MockDisplay::new();
+        Text::new(text, Point::new(0, 4), text_style)
+            .draw(&mut display)
+            .unwrap();
+
+        display
+    }
+
+    #[test]
+    fn draw() {
+        let font = SerializedBdfFont::new(TEST_FONT).unwrap();
+        draw_text(&font, "ab?").assert_pattern(&[
+            "          #    #",
+            "####     #    # ",
+            "#  #    #    #  ",
+            "#  #   #    #   ",
+            "####  #    #    ",
+        ]);
+    }
+
+    #[test]
+    fn truncated_font() {
+        assert_eq!(SerializedBdfFont::new(&[]), Err("No header"));
+        assert_eq!(
+            SerializedBdfFont::new(&TEST_FONT[0..HEADER_SIZE]),
+            Err("No metadata")
+        );
+
+        // TODO: check presence of replacement glyph in `new`
+        // let no_glyph_bitmaps_font =
+        //     SerializedBdfFont::new(&TEST_FONT[0..HEADER_SIZE + 2 * GLYPH_TABLE_ENTRY_SIZE])
+        //         .unwrap();
+        // draw_text(&no_glyph_bitmaps_font, "abc").assert_pattern(&[]);
+    }
+}
