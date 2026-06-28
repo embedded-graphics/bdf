@@ -9,10 +9,14 @@ use embedded_graphics::{
 
 use crate::DisplayBdfGlyph;
 
+/// Font metrics.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct Metrics {
+    /// Ascent above the baseline in pixels.
     pub ascent: u32,
+    /// Descent below the baseline in pixels.
     pub descent: u32,
+    /// Line height in pixels.
     pub line_height: u32,
 }
 

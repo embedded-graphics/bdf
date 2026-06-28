@@ -22,10 +22,8 @@ use embedded_graphics::{
 
 mod proportional;
 mod serialized;
-pub use proportional::{ProportionalFont, ProportionalTextStyle};
+pub use proportional::{ProportionalFont, ProportionalTextStyle, Metrics};
 pub use serialized::{SerializedBdfFont, SerializedBdfTextStyle};
-
-use crate::proportional::Metrics;
 
 /// BDF font.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
